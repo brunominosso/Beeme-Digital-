@@ -8,7 +8,7 @@ export default async function AdminPage() {
   const { data: { user } } = await supabase.auth.getUser()
 
   const { data: profile } = await supabase.from('profiles').select('role').eq('id', user!.id).single()
-  if (profile?.role !== 'admin') redirect('/')
+  if ((profile as { role: string } | null)?.role !== 'admin') redirect('/')
 
   const { data: profiles } = await supabase.from('profiles').select('*').order('name')
 
