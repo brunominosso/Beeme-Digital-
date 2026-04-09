@@ -1,0 +1,110 @@
+@import "tailwindcss";
+
+:root {
+  /* ── Cores base ── */
+  --background:   #08080F;
+  --surface:      #0f0f1a;
+  --surface-2:    #16162a;
+  --border:       #9FA4DB22;
+  --border-soft:  #9FA4DB14;
+
+  /* ── Paleta Beeme ── */
+  --lavanda:      #9FA4DB;
+  --lavanda-light:#B8BCEE;
+  --cream:        #EEEAE0;
+
+  /* ── Texto ── */
+  --text:         #EEEAE0;
+  --text-muted:   #9FA4DB;
+  --text-dim:     #5a5e8a;
+
+  /* ── Accent (lavanda como primário) ── */
+  --accent:       #9FA4DB;
+  --accent-hover: #B8BCEE;
+
+  /* ── Semânticas ── */
+  --success:      #4ade80;
+  --warning:      #fbbf24;
+  --danger:       #f87171;
+}
+
+/* ── Tipografia ── */
+body {
+  background: var(--background);
+  color: var(--text);
+  font-family: var(--font-dm), "DM Sans", system-ui, sans-serif;
+  font-size: 15px;
+  line-height: 1.6;
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Barlow Condensed — headings, labels, stats */
+h1, h2, h3, h4 {
+  font-family: var(--font-barlow), "Barlow Condensed", sans-serif;
+  letter-spacing: 0.01em;
+}
+
+/* Playfair — usado pontualmente com .serif */
+.serif {
+  font-family: var(--font-playfair), "Playfair Display", serif;
+}
+
+/* Labels uppercase em Barlow */
+.label-caps {
+  font-family: var(--font-barlow), "Barlow Condensed", sans-serif;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 99px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-dim); }
+
+/* ── Selection ── */
+::selection {
+  background: #9FA4DB33;
+  color: var(--cream);
+}
+
+/* ── Input base ── */
+input, textarea, select {
+  font-family: var(--font-dm), "DM Sans", sans-serif;
+  font-size: 0.875rem;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator,
+input[type="datetime-local"]::-webkit-calendar-picker-indicator {
+  filter: invert(0.7);
+}
+
+/* ── Agent output (pipeline) ── */
+.agent-output {
+  font-size: 0.875rem;
+  line-height: 1.7;
+  font-family: var(--font-dm), "DM Sans", sans-serif;
+}
+.agent-output h1, .agent-output h2, .agent-output h3 {
+  font-family: var(--font-barlow), "Barlow Condensed", sans-serif;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  margin: 1rem 0 0.5rem;
+  color: var(--cream);
+}
+.agent-output p { margin: 0.5rem 0; }
+.agent-output ul, .agent-output ol { padding-left: 1.25rem; margin: 0.5rem 0; }
+.agent-output li { margin: 0.25rem 0; }
+.agent-output strong { color: var(--cream); font-weight: 600; }
+.agent-output code {
+  background: var(--surface-2);
+  padding: 0.1rem 0.3rem;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  color: var(--lavanda-light);
+}
+.agent-output hr { border-color: var(--border); margin: 1rem 0; }
