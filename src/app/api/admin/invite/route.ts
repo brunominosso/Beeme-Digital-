@@ -14,8 +14,9 @@ export async function POST(req: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
 
-  const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
-  if (profile?.role !== 'admin') return NextResponse.json({ error: 'Sem permissão' }, { status: 403 })
+  const { data: profileData } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+  const profileRole = (profileData as unknown as { role: string } | null)?.role
+  if (profileRole !== 'admin') return NextResponse.json({ error: 'Sem permissão' }, { status: 403 })
 
   const { email, name, role, avatar_color } = await req.json()
   if (!email || !name || !role) return NextResponse.json({ error: 'Dados inválidos' }, { status: 400 })
