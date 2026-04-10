@@ -187,15 +187,17 @@ function AdminView({ profile, myClients, allTasks, upcomingMeetings, todayStr, t
                     </span>
                   )}
                 </div>
-                <div className="grid grid-cols-2 gap-2">
+                <div className={`grid gap-2 ${['designer', 'social_media', 'editor'].includes(member.role) ? 'grid-cols-2' : 'grid-cols-1'}`}>
                   <div className="rounded-lg px-3 py-2 text-center" style={{ background: 'var(--surface-2)' }}>
                     <div className="text-base font-bold" style={{ color: member.pendingTasks > 0 ? '#f59e0b' : 'white' }}>{member.pendingTasks}</div>
                     <div className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>tarefas</div>
                   </div>
-                  <div className="rounded-lg px-3 py-2 text-center" style={{ background: 'var(--surface-2)' }}>
-                    <div className="text-base font-bold" style={{ color: member.activePosts > 0 ? '#8b5cf6' : 'white' }}>{member.activePosts}</div>
-                    <div className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>posts ativos</div>
-                  </div>
+                  {['designer', 'social_media', 'editor'].includes(member.role) && (
+                    <div className="rounded-lg px-3 py-2 text-center" style={{ background: 'var(--surface-2)' }}>
+                      <div className="text-base font-bold" style={{ color: member.activePosts > 0 ? '#8b5cf6' : 'white' }}>{member.activePosts}</div>
+                      <div className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>posts ativos</div>
+                    </div>
+                  )}
                 </div>
               </button>
             ))}
