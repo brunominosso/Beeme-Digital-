@@ -7,8 +7,9 @@ export default async function AdminPage() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
-  const { data: profile } = await supabase.from('profiles').select('role').eq('id', user!.id).single()
-  if ((profile as { role: string } | null)?.role !== 'admin') redirect('/')
+  const { data: profileData } = await supabase.from('profiles').select('role').eq('id', user!.id).single()
+  const role = (profileData as unknown as { role: string } | null)?.role
+  if (role !== 'admin') redirect('/')
 
   const { data: profiles } = await supabase.from('profiles').select('*').order('name')
 
