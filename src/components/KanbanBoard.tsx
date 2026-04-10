@@ -45,13 +45,18 @@ export default function KanbanBoard({
   const [assigneeId, setAssigneeId] = useState('')
   const [priority, setPriority] = useState('medium')
   const [dueDate, setDueDate] = useState('')
+  const [dueTime, setDueTime] = useState('')
   const [status, setStatus] = useState('todo')
   const [saving, setSaving] = useState(false)
+
+  // Date range filter
+  const [filterFrom, setFilterFrom] = useState('')
+  const [filterTo, setFilterTo] = useState('')
 
   function openNew(col: string) {
     setEditTask(null)
     setTitle(''); setDescription(''); setClientId(''); setAssigneeId('')
-    setPriority('medium'); setDueDate(''); setStatus(col)
+    setPriority('medium'); setDueDate(''); setDueTime(''); setStatus(col)
     setShowForm(true)
   }
 
@@ -59,7 +64,8 @@ export default function KanbanBoard({
     setEditTask(task)
     setTitle(task.title); setDescription(task.description || '')
     setClientId(task.client_id || ''); setAssigneeId(task.assignee_id || '')
-    setPriority(task.priority); setDueDate(task.due_date || ''); setStatus(task.status)
+    setPriority(task.priority); setDueDate(task.due_date || '')
+    setDueTime((task as any).due_time || ''); setStatus(task.status)
     setShowForm(true)
   }
 
@@ -71,7 +77,7 @@ export default function KanbanBoard({
     const payload = {
       title, description: description || null,
       client_id: clientId || null, assignee_id: assigneeId || null,
-      priority, due_date: dueDate || null, status,
+      priority, due_date: dueDate || null, due_time: dueTime || null, status,
     }
 
     if (editTask) {
@@ -119,11 +125,44 @@ export default function KanbanBoard({
         </button>
       </div>
 
+      {/* Date filter bar */}
+      <div className="px-6 py-3 border-b flex items-center gap-3 shrink-0" style={{ borderColor: 'var(--border)' }}>
+        <span className="text-xs font-medium shrink-0" style={{ color: 'var(--text-muted)' }}>Filtrar por data:</span>
+        <div className="flex items-center gap-2">
+          <input type="date" value={filterFrom} onChange={e => setFilterFrom(e.target.value)}
+            className="px-3 py-1.5 rounded-lg text-xs text-white outline-none"
+            style={{ background: 'var(--surface-2)', border: '1px solid var(--border)' }} />
+          <span className="text-xs" style={{ color: 'var(--text-muted)' }}>até</span>
+          <input type="date" value={filterTo} onChange={e => setFilterTo(e.target.value)}
+            className="px-3 py-1.5 rounded-lg text-xs text-white outline-none"
+            style={{ background: 'var(--surface-2)', border: '1px solid var(--border)' }} />
+        </div>
+        {(filterFrom || filterTo) && (
+          <button onClick={() => { setFilterFrom(''); setFilterTo('') }}
+            className="text-xs px-2.5 py-1 rounded-lg"
+            style={{ background: 'var(--surface-2)', color: 'var(--text-muted)' }}>
+            Limpar filtro ✕
+          </button>
+        )}
+        <span className="text-xs ml-auto" style={{ color: 'var(--text-muted)' }}>
+          {tasks.filter(t => {
+            if (!filterFrom && !filterTo) return t.status !== 'done'
+            const d = t.due_date || ''
+            return (!filterFrom || d >= filterFrom) && (!filterTo || d <= filterTo)
+          }).length} tarefas
+        </span>
+      </div>
+
       {/* Board */}
       <div className="flex-1 overflow-x-auto p-6">
         <div className="flex gap-4 h-full min-w-max">
           {COLUMNS.map(col => {
-            const colTasks = tasks.filter(t => t.status === col.id)
+            const colTasks = tasks.filter(t => {
+              if (t.status !== col.id) return false
+              if (!filterFrom && !filterTo) return true
+              const d = t.due_date || ''
+              return (!filterFrom || d >= filterFrom) && (!filterTo || d <= filterTo)
+            })
             const isOver = dragOver === col.id
             return (
               <div key={col.id}
@@ -182,7 +221,8 @@ export default function KanbanBoard({
                           )}
                           {task.due_date && (
                             <span className="text-xs ml-auto" style={{ color: isOverdue ? 'var(--danger)' : 'var(--text-muted)' }}>
-                              {isOverdue ? '⚠ ' : ''}{new Date(task.due_date).toLocaleDateString('pt-PT', { day: 'numeric', month: 'short' })}
+                              {isOverdue ? '⚠ ' : ''}{new Date(task.due_date + 'T12:00:00').toLocaleDateString('pt-PT', { day: 'numeric', month: 'short' })}
+                              {(task as any).due_time && ` ${(task as any).due_time}`}
                             </span>
                           )}
                         </div>
@@ -231,8 +271,14 @@ export default function KanbanBoard({
               </select>
             </div>
 
-            <input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)}
-              className={inputClass} style={inputStyle} />
+            <div className="flex gap-2">
+              <input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)}
+                className={inputClass} style={inputStyle} />
+              <input type="time" value={dueTime} onChange={e => setDueTime(e.target.value)}
+                placeholder="Hora"
+                className="w-28 px-3 py-2 rounded-lg text-sm text-white outline-none"
+                style={inputStyle} />
+            </div>
 
             <div className="flex gap-2">
               <button onClick={handleSave} disabled={!title || saving}

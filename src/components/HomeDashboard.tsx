@@ -316,6 +316,8 @@ function GestorView({ profile, myClients, allTasks, upcomingMeetings, todayStr, 
   const [tDate, setTDate] = useState(todayStr)
   const [tDays, setTDays] = useState<number[]>([])
   const [tSaving, setTSaving] = useState(false)
+  const [editingTask, setEditingTask] = useState<Task | null>(null)
+  const [tTime, setTTime] = useState('')
 
   const roleColor = ROLE_COLORS[profile.role] || 'var(--accent)'
   const roleLabel = ROLE_LABELS[profile.role] || profile.role
@@ -332,7 +334,7 @@ function GestorView({ profile, myClients, allTasks, upcomingMeetings, todayStr, 
   const tomorrowDow = new Date(tomorrowStr + 'T12:00:00').getDay()
 
   const tasksByTab: Record<TaskTab, Task[]> = {
-    hoje: tasks.filter(t => t.status !== 'done' && (t.due_date?.startsWith(todayStr) || isRecurringOnDay(t, todayDow))),
+    hoje: tasks.filter(t => t.status !== 'done' && ((t.due_date && t.due_date <= todayStr) || isRecurringOnDay(t, todayDow))),
     amanha: tasks.filter(t => t.status !== 'done' && (t.due_date?.startsWith(tomorrowStr) || isRecurringOnDay(t, tomorrowDow))),
     semana: tasks.filter(t => t.status !== 'done' && ((t.due_date && t.due_date >= todayStr && t.due_date <= (weekEndStr || '')) || !!t.recurrence)),
     concluidas: tasks.filter(t => t.status === 'done').slice(0, 10),
@@ -349,20 +351,55 @@ function GestorView({ profile, myClients, allTasks, upcomingMeetings, todayStr, 
     setEditingResp(false)
   }
 
-  async function createTask() {
+  function openEditTask(task: Task) {
+    setEditingTask(task)
+    setTTitle(task.title)
+    setTDescription(task.description || '')
+    setTPriority(task.priority)
+    const rec = task.recurrence
+    setTMode(rec ? 'recurrence' : 'date')
+    setTDate(task.due_date || todayStr)
+    setTDays(rec ? rec.replace('weekly:', '').split(',').map(Number) : [])
+    setTTime((task as any).due_time || '')
+    setShowTaskModal(true)
+  }
+
+  function closeTaskModal() {
+    setShowTaskModal(false); setEditingTask(null)
+    setTTitle(''); setTDescription(''); setTPriority('medium')
+    setTMode('date'); setTDate(todayStr); setTDays([]); setTTime('')
+  }
+
+  async function saveTask() {
     if (!tTitle.trim()) return
     if (tMode === 'recurrence' && tDays.length === 0) return
     setTSaving(true)
     const supabase = createClient()
-    const { data: { user } } = await supabase.auth.getUser()
     const recurrence = tMode === 'recurrence' ? `weekly:${tDays.sort().join(',')}` : null
-    const { data } = await supabase.from('tasks').insert({
-      title: tTitle, description: tDescription || null, assignee_id: user?.id, created_by: user?.id,
-      priority: tPriority, status: 'todo', due_date: tMode === 'date' && tDate ? tDate : null, recurrence, position: 0,
-    }).select().single()
-    if (data) setTasks(prev => [data as Task, ...prev])
-    setTSaving(false); setShowTaskModal(false); setTTitle(''); setTDescription(''); setTPriority('medium')
-    setTMode('date'); setTDate(todayStr); setTDays([])
+    const payload: any = {
+      title: tTitle, description: tDescription || null,
+      priority: tPriority, due_date: tMode === 'date' && tDate ? tDate : null,
+      recurrence, due_time: tTime || null,
+    }
+    if (editingTask) {
+      await supabase.from('tasks').update(payload).eq('id', editingTask.id)
+      setTasks(prev => prev.map(t => t.id === editingTask.id ? { ...t, ...payload } : t))
+    } else {
+      const { data: { user } } = await supabase.auth.getUser()
+      const { data } = await supabase.from('tasks').insert({
+        ...payload, assignee_id: user?.id, created_by: user?.id, status: 'todo', position: 0,
+      }).select().single()
+      if (data) setTasks(prev => [data as Task, ...prev])
+    }
+    setTSaving(false); closeTaskModal()
+  }
+
+  async function deleteTask(task: Task) {
+    if (!confirm('Eliminar esta tarefa?')) return
+    const supabase = createClient()
+    await supabase.from('tasks').delete().eq('id', task.id)
+    setTasks(prev => prev.filter(t => t.id !== task.id))
+    closeTaskModal()
   }
 
   async function toggleTaskDone(task: Task) {
@@ -503,7 +540,7 @@ function GestorView({ profile, myClients, allTasks, upcomingMeetings, todayStr, 
             <div className="flex items-center justify-between mb-4">
               <h2 className="font-semibold text-white">Acompanhamento de Tarefas</h2>
               <div className="flex items-center gap-2">
-                <button onClick={() => setShowTaskModal(true)}
+                <button onClick={() => { setEditingTask(null); setShowTaskModal(true) }}
                   className="px-3 py-1.5 rounded-lg text-xs font-semibold text-white"
                   style={{ background: 'var(--accent)' }}>
                   + Nova
@@ -542,31 +579,41 @@ function GestorView({ profile, myClients, allTasks, upcomingMeetings, todayStr, 
                   {taskTab === 'concluidas' ? 'Nenhuma tarefa concluída ainda' : 'Sem tarefas para este período 🎉'}
                 </p>
                 {taskTab !== 'concluidas' && (
-                  <button onClick={() => setShowTaskModal(true)}
+                  <button onClick={() => { setEditingTask(null); setShowTaskModal(true) }}
                     className="text-xs px-3 py-1.5 rounded-lg font-medium"
                     style={{ background: 'var(--surface-2)', color: 'var(--accent)', border: '1px solid var(--border)' }}>
                     + Criar tarefa
                   </button>
                 )}
               </div>
-            ) : visibleTasks.map(task => (
-              <div key={task.id} className="flex items-center gap-3 px-3 py-2.5 rounded-lg" style={{ background: 'var(--surface-2)' }}>
-                <button onClick={() => toggleTaskDone(task)}
-                  className="w-4 h-4 rounded border-2 flex items-center justify-center shrink-0 transition-colors"
-                  style={{ borderColor: task.status === 'done' ? 'var(--success)' : PRIORITY_COLOR[task.priority], background: task.status === 'done' ? 'var(--success)' : 'transparent' }}>
-                  {task.status === 'done' && <span className="text-white text-xs leading-none">✓</span>}
-                </button>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm text-white truncate"
-                    style={{ textDecoration: task.status === 'done' ? 'line-through' : 'none', opacity: task.status === 'done' ? 0.6 : 1 }}>
-                    {task.title}
-                  </p>
-                  <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                    {PRIORITY_LABEL[task.priority]}{task.recurrence && ' · 🔁'}{task.due_date && ` · ${new Date(task.due_date).toLocaleDateString('pt-PT', { day: 'numeric', month: 'short' })}`}
-                  </p>
+            ) : visibleTasks.map(task => {
+              const isOverdue = task.due_date && task.due_date < todayStr && task.status !== 'done'
+              return (
+                <div key={task.id} className="flex items-center gap-3 px-3 py-2.5 rounded-lg group" style={{ background: 'var(--surface-2)' }}>
+                  <button onClick={() => toggleTaskDone(task)}
+                    className="w-4 h-4 rounded border-2 flex items-center justify-center shrink-0 transition-colors"
+                    style={{ borderColor: task.status === 'done' ? 'var(--success)' : PRIORITY_COLOR[task.priority], background: task.status === 'done' ? 'var(--success)' : 'transparent' }}>
+                    {task.status === 'done' && <span className="text-white text-xs leading-none">✓</span>}
+                  </button>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-white truncate"
+                      style={{ textDecoration: task.status === 'done' ? 'line-through' : 'none', opacity: task.status === 'done' ? 0.6 : 1 }}>
+                      {task.title}
+                    </p>
+                    <p className="text-xs" style={{ color: isOverdue ? 'var(--danger)' : 'var(--text-muted)' }}>
+                      {isOverdue ? '⚠ Em atraso · ' : ''}{PRIORITY_LABEL[task.priority]}{task.recurrence && ' · 🔁'}
+                      {task.due_date && ` · ${new Date(task.due_date + 'T12:00:00').toLocaleDateString('pt-PT', { day: 'numeric', month: 'short' })}`}
+                      {(task as any).due_time && ` às ${(task as any).due_time}`}
+                    </p>
+                  </div>
+                  <button onClick={() => openEditTask(task)}
+                    className="text-xs opacity-0 group-hover:opacity-100 transition-opacity shrink-0 px-2 py-1 rounded"
+                    style={{ color: 'var(--text-muted)', background: 'var(--surface)' }}>
+                    ✎
+                  </button>
                 </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         </div>
 
@@ -608,10 +655,13 @@ function GestorView({ profile, myClients, allTasks, upcomingMeetings, todayStr, 
       {showTaskModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
           style={{ background: 'rgba(0,0,0,0.6)' }}
-          onClick={e => { if (e.target === e.currentTarget) setShowTaskModal(false) }}>
+          onClick={e => { if (e.target === e.currentTarget) closeTaskModal() }}>
           <div className="rounded-2xl p-6 w-full max-w-md space-y-4"
             style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
-            <h3 className="text-lg font-semibold text-white">Nova tarefa</h3>
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-white">{editingTask ? 'Editar tarefa' : 'Nova tarefa'}</h3>
+              <button onClick={closeTaskModal} style={{ color: 'var(--text-muted)' }}>✕</button>
+            </div>
             <input value={tTitle} onChange={e => setTTitle(e.target.value)}
               placeholder="Título da tarefa"
               className="w-full px-3 py-2 rounded-lg text-sm text-white outline-none"
@@ -643,9 +693,15 @@ function GestorView({ profile, myClients, allTasks, upcomingMeetings, todayStr, 
                 ))}
               </div>
               {tMode === 'date' ? (
-                <input type="date" value={tDate} onChange={e => setTDate(e.target.value)}
-                  className="w-full px-3 py-2 rounded-lg text-sm text-white outline-none"
-                  style={inputStyle} />
+                <div className="flex gap-2">
+                  <input type="date" value={tDate} onChange={e => setTDate(e.target.value)}
+                    className="flex-1 px-3 py-2 rounded-lg text-sm text-white outline-none"
+                    style={inputStyle} />
+                  <input type="time" value={tTime} onChange={e => setTTime(e.target.value)}
+                    placeholder="Hora (opcional)"
+                    className="w-32 px-3 py-2 rounded-lg text-sm text-white outline-none"
+                    style={inputStyle} />
+                </div>
               ) : (
                 <div className="flex gap-1.5">
                   {WEEKDAYS.map(d => (
@@ -660,15 +716,22 @@ function GestorView({ profile, myClients, allTasks, upcomingMeetings, todayStr, 
               )}
             </div>
             <div className="flex gap-2 pt-2">
-              <button onClick={() => setShowTaskModal(false)}
+              {editingTask && (
+                <button onClick={() => deleteTask(editingTask)}
+                  className="px-4 py-2.5 rounded-xl text-sm font-semibold"
+                  style={{ background: '#ef444420', color: 'var(--danger)', border: '1px solid #ef444430' }}>
+                  Eliminar
+                </button>
+              )}
+              <button onClick={closeTaskModal}
                 className="flex-1 py-2.5 rounded-xl text-sm font-semibold"
                 style={{ background: 'var(--surface-2)', color: 'var(--text-muted)' }}>
                 Cancelar
               </button>
-              <button onClick={createTask} disabled={tSaving || !tTitle.trim()}
+              <button onClick={saveTask} disabled={tSaving || !tTitle.trim()}
                 className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-white disabled:opacity-50"
                 style={{ background: 'var(--accent)' }}>
-                {tSaving ? 'A criar...' : 'Criar tarefa'}
+                {tSaving ? 'A guardar...' : editingTask ? 'Guardar' : 'Criar tarefa'}
               </button>
             </div>
           </div>
