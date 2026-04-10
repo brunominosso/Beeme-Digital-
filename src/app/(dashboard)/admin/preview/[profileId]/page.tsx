@@ -14,8 +14,9 @@ export default async function PreviewPage({ params }: { params: Promise<{ profil
   // Só admin pode aceder
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
-  const { data: myProfile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
-  if (myProfile?.role !== 'admin') redirect('/')
+  const { data: myProfileData } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+  const myRole = (myProfileData as unknown as { role: string } | null)?.role
+  if (myRole !== 'admin') redirect('/')
 
   const now = new Date()
   const todayStr = now.toISOString().split('T')[0]

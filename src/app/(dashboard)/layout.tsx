@@ -8,8 +8,8 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
   if (!user) redirect('/login')
 
-  const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
-  const role = profile?.role ?? 'gestor'
+  const { data: profileData } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+  const role = (profileData as unknown as { role: string } | null)?.role ?? 'gestor'
 
   return (
     <div className="flex h-screen overflow-hidden" style={{ background: 'var(--background)' }}>
