@@ -531,47 +531,108 @@ function GestorView({ profile, myClients, allTasks, upcomingMeetings, todayStr, 
         </div>
       )}
 
-      {/* Tasks + Meetings */}
-      <div className="grid grid-cols-2 gap-6">
-
-        {/* Tasks with tabs */}
-        <div className="rounded-xl overflow-hidden" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
-          <div className="px-5 pt-5 pb-0">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="font-semibold text-white">Acompanhamento de Tarefas</h2>
-              <div className="flex items-center gap-2">
-                <button onClick={() => { setEditingTask(null); setShowTaskModal(true) }}
-                  className="px-3 py-1.5 rounded-lg text-xs font-semibold text-white"
-                  style={{ background: 'var(--accent)' }}>
-                  + Nova
-                </button>
-                <Link href="/kanban" className="text-xs" style={{ color: 'var(--text-muted)' }}>Kanban →</Link>
-              </div>
-            </div>
-            <div className="flex gap-0 border-b" style={{ borderColor: 'var(--border)' }}>
-              {([
-                { key: 'hoje', label: 'Hoje', count: tasksByTab.hoje.length },
-                { key: 'amanha', label: 'Amanhã', count: tasksByTab.amanha.length },
-                { key: 'semana', label: 'Semana', count: tasksByTab.semana.length },
-                { key: 'concluidas', label: 'Concluídas', count: null },
-              ] as { key: TaskTab; label: string; count: number | null }[]).map(tab => (
-                <button key={tab.key} onClick={() => setTaskTab(tab.key)}
-                  className="px-3 py-2 text-xs font-medium flex items-center gap-1.5 border-b-2 transition-colors -mb-px"
-                  style={{
-                    borderColor: taskTab === tab.key ? 'var(--accent)' : 'transparent',
-                    color: taskTab === tab.key ? 'white' : 'var(--text-muted)',
-                  }}>
-                  {tab.label}
-                  {tab.count !== null && tab.count > 0 && (
-                    <span className="px-1.5 py-0.5 rounded-full text-xs font-bold"
-                      style={{ background: taskTab === tab.key ? 'var(--accent)' : 'var(--surface-2)', color: taskTab === tab.key ? 'white' : 'var(--text-muted)' }}>
-                      {tab.count}
-                    </span>
-                  )}
-                </button>
-              ))}
+      {/* Tasks section — header + tabs always visible */}
+      <div className="rounded-xl overflow-hidden" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+        <div className="px-5 pt-5 pb-0">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="font-semibold text-white">Acompanhamento de Tarefas</h2>
+            <div className="flex items-center gap-2">
+              <button onClick={() => { setEditingTask(null); setShowTaskModal(true) }}
+                className="px-3 py-1.5 rounded-lg text-xs font-semibold text-white"
+                style={{ background: 'var(--accent)' }}>
+                + Nova
+              </button>
+              <Link href="/kanban" className="text-xs" style={{ color: 'var(--text-muted)' }}>Kanban →</Link>
             </div>
           </div>
+          <div className="flex gap-0 border-b" style={{ borderColor: 'var(--border)' }}>
+            {([
+              { key: 'hoje', label: 'Hoje', count: tasksByTab.hoje.length },
+              { key: 'amanha', label: 'Amanhã', count: tasksByTab.amanha.length },
+              { key: 'semana', label: 'Semana', count: tasksByTab.semana.length },
+              { key: 'concluidas', label: 'Concluídas', count: null },
+            ] as { key: TaskTab; label: string; count: number | null }[]).map(tab => (
+              <button key={tab.key} onClick={() => setTaskTab(tab.key)}
+                className="px-3 py-2 text-xs font-medium flex items-center gap-1.5 border-b-2 transition-colors -mb-px"
+                style={{
+                  borderColor: taskTab === tab.key ? 'var(--accent)' : 'transparent',
+                  color: taskTab === tab.key ? 'white' : 'var(--text-muted)',
+                }}>
+                {tab.label}
+                {tab.count !== null && tab.count > 0 && (
+                  <span className="px-1.5 py-0.5 rounded-full text-xs font-bold"
+                    style={{ background: taskTab === tab.key ? 'var(--accent)' : 'var(--surface-2)', color: taskTab === tab.key ? 'white' : 'var(--text-muted)' }}>
+                    {tab.count}
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Semana: kanban por dia */}
+        {taskTab === 'semana' ? (() => {
+          const weekDays = Array.from({ length: 7 }, (_, i) => {
+            const d = new Date(todayStr + 'T12:00:00')
+            d.setDate(d.getDate() + i)
+            const ds = d.toISOString().split('T')[0]
+            const dow = d.getDay()
+            const label = d.toLocaleDateString('pt-PT', { weekday: 'short', day: 'numeric', month: 'short' })
+            const isToday = ds === todayStr
+            const dayTasks = tasks.filter(t => {
+              if (t.status === 'done') return false
+              if (t.due_date === ds) return true
+              if (t.recurrence) {
+                const days = t.recurrence.replace('weekly:', '').split(',').map(Number)
+                return days.includes(dow)
+              }
+              return false
+            })
+            return { ds, label, isToday, dayTasks, dow }
+          })
+          return (
+            <div className="p-4 overflow-x-auto">
+              <div className="flex gap-3 min-w-max">
+                {weekDays.map(day => (
+                  <div key={day.ds} className="w-48 flex flex-col rounded-xl"
+                    style={{ background: 'var(--surface-2)', border: `1px solid ${day.isToday ? 'var(--accent)' : 'var(--border)'}` }}>
+                    <div className="px-3 py-2.5 border-b flex items-center justify-between"
+                      style={{ borderColor: day.isToday ? 'var(--accent)30' : 'var(--border)' }}>
+                      <span className="text-xs font-semibold capitalize"
+                        style={{ color: day.isToday ? 'var(--accent)' : 'var(--cream)' }}>
+                        {day.label}
+                      </span>
+                      <span className="text-xs px-1.5 py-0.5 rounded-full"
+                        style={{ background: day.dayTasks.length > 0 ? 'var(--accent)20' : 'var(--surface)', color: day.dayTasks.length > 0 ? 'var(--accent)' : 'var(--text-muted)' }}>
+                        {day.dayTasks.length}
+                      </span>
+                    </div>
+                    <div className="p-2 space-y-1.5 min-h-24 flex-1">
+                      {day.dayTasks.length === 0 ? (
+                        <p className="text-xs text-center py-4" style={{ color: 'var(--text-muted)' }}>—</p>
+                      ) : day.dayTasks.map(task => (
+                        <button key={task.id} onClick={() => openEditTask(task)}
+                          className="w-full text-left rounded-lg px-2.5 py-2 hover:opacity-80 transition-opacity"
+                          style={{ background: 'var(--surface)', border: `1px solid ${PRIORITY_COLOR[task.priority]}30` }}>
+                          <p className="text-xs font-medium leading-snug" style={{ color: 'var(--cream)' }}>{task.title}</p>
+                          <div className="flex items-center gap-1.5 mt-1">
+                            <div className="w-1.5 h-1.5 rounded-full shrink-0"
+                              style={{ background: PRIORITY_COLOR[task.priority] }} />
+                            <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                              {PRIORITY_LABEL[task.priority]}
+                              {task.recurrence && ' · 🔁'}
+                              {(task as any).due_time && ` · ${(task as any).due_time}`}
+                            </span>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )
+        })() : (
           <div className="p-3 space-y-1.5 min-h-48 max-h-72 overflow-y-auto">
             {visibleTasks.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-32 gap-2">
@@ -615,39 +676,39 @@ function GestorView({ profile, myClients, allTasks, upcomingMeetings, todayStr, 
               )
             })}
           </div>
-        </div>
+        )}
+      </div>
 
-        {/* Meetings */}
-        <div className="rounded-xl overflow-hidden" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
-          <div className="px-5 py-4 border-b flex items-center justify-between" style={{ borderColor: 'var(--border)' }}>
-            <h2 className="font-semibold text-white">Reuniões próximas</h2>
-            <Link href="/meetings" className="text-xs" style={{ color: 'var(--accent)' }}>Ver todas →</Link>
-          </div>
-          <div className="p-3 space-y-1.5 max-h-72 overflow-y-auto">
-            {scheduledMeetings.length === 0 ? (
-              <div className="flex items-center justify-center h-20 text-sm" style={{ color: 'var(--text-muted)' }}>
-                Sem reuniões agendadas
-              </div>
-            ) : scheduledMeetings.slice(0, 6).map(m => {
-              const isToday = m.date.startsWith(todayStr)
-              const isTomorrow = m.date.startsWith(tomorrowStr)
-              return (
-                <div key={m.id} className="flex items-center gap-3 px-3 py-2 rounded-lg" style={{ background: 'var(--surface-2)' }}>
-                  <div className="w-9 h-9 rounded-lg flex flex-col items-center justify-center shrink-0"
-                    style={{ background: isToday ? roleColor + '20' : 'var(--surface)', border: `1px solid ${isToday ? roleColor : 'var(--border)'}` }}>
-                    <span className="text-xs font-bold leading-none" style={{ color: isToday ? roleColor : 'white' }}>{new Date(m.date).getDate()}</span>
-                    <span className="text-xs leading-none mt-0.5" style={{ color: 'var(--text-muted)' }}>{new Date(m.date).toLocaleDateString('pt-PT', { month: 'short' })}</span>
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm truncate text-white">{m.title}</p>
-                    <p className="text-xs" style={{ color: isToday ? roleColor : isTomorrow ? '#f59e0b' : 'var(--text-muted)' }}>
-                      {isToday ? 'Hoje' : isTomorrow ? 'Amanhã' : new Date(m.date).toLocaleDateString('pt-PT', { day: 'numeric', month: 'short' })}
-                    </p>
-                  </div>
+      {/* Meetings */}
+      <div className="rounded-xl overflow-hidden" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+        <div className="px-5 py-4 border-b flex items-center justify-between" style={{ borderColor: 'var(--border)' }}>
+          <h2 className="font-semibold text-white">Reuniões próximas</h2>
+          <Link href="/meetings" className="text-xs" style={{ color: 'var(--accent)' }}>Ver todas →</Link>
+        </div>
+        <div className="grid grid-cols-3 gap-2 p-3 max-h-48 overflow-y-auto">
+          {scheduledMeetings.length === 0 ? (
+            <div className="col-span-3 flex items-center justify-center h-16 text-sm" style={{ color: 'var(--text-muted)' }}>
+              Sem reuniões agendadas
+            </div>
+          ) : scheduledMeetings.slice(0, 6).map(m => {
+            const isToday = m.date.startsWith(todayStr)
+            const isTomorrow = m.date.startsWith(tomorrowStr)
+            return (
+              <div key={m.id} className="flex items-center gap-2.5 px-3 py-2.5 rounded-lg" style={{ background: 'var(--surface-2)' }}>
+                <div className="w-8 h-8 rounded-lg flex flex-col items-center justify-center shrink-0"
+                  style={{ background: isToday ? roleColor + '20' : 'var(--surface)', border: `1px solid ${isToday ? roleColor : 'var(--border)'}` }}>
+                  <span className="text-xs font-bold leading-none" style={{ color: isToday ? roleColor : 'white' }}>{new Date(m.date).getDate()}</span>
+                  <span className="text-xs leading-none mt-0.5" style={{ color: 'var(--text-muted)' }}>{new Date(m.date).toLocaleDateString('pt-PT', { month: 'short' })}</span>
                 </div>
-              )
-            })}
-          </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm truncate text-white">{m.title}</p>
+                  <p className="text-xs" style={{ color: isToday ? roleColor : isTomorrow ? '#f59e0b' : 'var(--text-muted)' }}>
+                    {isToday ? 'Hoje' : isTomorrow ? 'Amanhã' : new Date(m.date).toLocaleDateString('pt-PT', { day: 'numeric', month: 'short' })}
+                  </p>
+                </div>
+              </div>
+            )
+          })}
         </div>
       </div>
 
