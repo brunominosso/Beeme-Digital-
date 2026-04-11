@@ -3,16 +3,18 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
-import type { Client, Task, Invoice, Expense, Profile } from '@/types/database'
+import type { Client, Task, Invoice, Expense, Profile, PaymentSchedule } from '@/types/database'
 
 const WEEKDAYS = [{ label: 'Dom', value: 0 },{ label: 'Seg', value: 1 },{ label: 'Ter', value: 2 },{ label: 'Qua', value: 3 },{ label: 'Qui', value: 4 },{ label: 'Sex', value: 5 },{ label: 'Sáb', value: 6 }]
 function getInitials(name: string) { return name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2) }
-function fmt(v: number) { return new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR', minimumFractionDigits: 0 }).format(v) }
+function fmt(v: number) { return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 0 }).format(v) }
 
 const roleColor = '#4ade80'
 const inputStyle = { background: 'var(--surface-2)', border: '1px solid var(--border)', color: 'var(--text)' }
 
-export default function HomeFinanceiro({ profile, myClients, allTasks, todayStr, weekEndStr, allInvoices, allExpenses }: {
+type ScheduleWithClient = PaymentSchedule & { clients: { name: string; status: string } | null }
+
+export default function HomeFinanceiro({ profile, myClients, allTasks, todayStr, weekEndStr, allInvoices, allExpenses, paymentSchedules }: {
   profile: Profile
   myClients: Client[]
   allTasks: Task[]
@@ -20,6 +22,7 @@ export default function HomeFinanceiro({ profile, myClients, allTasks, todayStr,
   weekEndStr: string
   allInvoices: Invoice[]
   allExpenses: Expense[]
+  paymentSchedules: ScheduleWithClient[]
 }) {
   const [tasks, setTasks] = useState(allTasks)
   const [showTaskModal, setShowTaskModal] = useState(false)
@@ -41,6 +44,21 @@ export default function HomeFinanceiro({ profile, myClients, allTasks, todayStr,
   const aReceber = invoicesPendentes.reduce((s, i) => s + i.amount, 0)
   const despesasMes = allExpenses.filter(e => e.date.startsWith(mesAtual)).reduce((s, e) => s + e.amount, 0)
   const saldo = receitaMes - despesasMes
+
+  // Previsão de recebimentos via recorrências
+  const todayDay = now.getDate()
+  // Este mês: todas as recorrências ativas (mesmo clientes recém-inativados ainda contam este mês)
+  const previsaoMesAtual = paymentSchedules
+    .filter(s => s.active)
+    .reduce((acc, s) => acc + Number(s.amount), 0)
+  // Próximo mês: só clientes com status ativo
+  const previsaoProximoMes = paymentSchedules
+    .filter(s => s.active && s.clients?.status === 'ativo')
+    .reduce((acc, s) => acc + Number(s.amount), 0)
+  // Pagamentos ainda a receber este mês (dia >= hoje)
+  const aReceberEsteMes = paymentSchedules
+    .filter(s => s.active && s.payment_day >= todayDay)
+    .sort((a, b) => a.payment_day - b.payment_day)
 
   // Tarefas de hoje
   function isRecurringOnDay(task: Task, dow: number) {
@@ -126,6 +144,64 @@ export default function HomeFinanceiro({ profile, myClients, allTasks, todayStr,
           </Link>
         ))}
       </div>
+
+      {/* Previsão de recebimentos — visível só para financeiro */}
+      {paymentSchedules.length > 0 && (
+        <div className="rounded-xl overflow-hidden" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+          <div className="px-5 py-4 border-b flex items-center justify-between" style={{ borderColor: 'var(--border)' }}>
+            <div>
+              <h2 className="font-semibold" style={{ color: 'var(--cream)' }}>Previsão de recebimentos</h2>
+              <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>Recorrências ativas cadastradas</p>
+            </div>
+            <div className="flex gap-6 text-right">
+              <div>
+                <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Este mês</p>
+                <p className="text-base font-bold" style={{ color: roleColor }}>{fmt(previsaoMesAtual)}</p>
+              </div>
+              <div>
+                <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Próximo mês</p>
+                <p className="text-base font-bold" style={{ color: previsaoProximoMes < previsaoMesAtual ? 'var(--danger)' : roleColor }}>
+                  {fmt(previsaoProximoMes)}
+                  {previsaoProximoMes < previsaoMesAtual && (
+                    <span className="text-xs font-normal ml-1" style={{ color: 'var(--danger)' }}>
+                      (-{fmt(previsaoMesAtual - previsaoProximoMes)})
+                    </span>
+                  )}
+                </p>
+              </div>
+            </div>
+          </div>
+          {aReceberEsteMes.length > 0 && (
+            <div className="divide-y" style={{ borderColor: 'var(--border)' }}>
+              {aReceberEsteMes.slice(0, 6).map(s => (
+                <div key={s.id} className="flex items-center gap-4 px-5 py-3">
+                  <div className="w-9 h-9 rounded-lg flex flex-col items-center justify-center shrink-0"
+                    style={{ background: '#a855f715' }}>
+                    <span className="text-xs leading-none font-bold" style={{ color: '#a855f7' }}>{s.payment_day}</span>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate" style={{ color: 'var(--cream)' }}>{s.clients?.name ?? '—'}</p>
+                    <p className="text-xs" style={{ color: 'var(--text-muted)' }}>{s.description}</p>
+                  </div>
+                  <p className="text-sm font-bold shrink-0" style={{ color: roleColor }}>{fmt(Number(s.amount))}</p>
+                </div>
+              ))}
+              {aReceberEsteMes.length > 6 && (
+                <div className="px-5 py-2 text-center">
+                  <Link href="/financial" className="text-xs" style={{ color: roleColor }}>
+                    +{aReceberEsteMes.length - 6} mais → ver em Recorrências
+                  </Link>
+                </div>
+              )}
+            </div>
+          )}
+          {aReceberEsteMes.length === 0 && (
+            <div className="px-5 py-4 text-center text-sm" style={{ color: 'var(--text-muted)' }}>
+              Todos os pagamentos deste mês já foram recebidos ✓
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="grid grid-cols-3 gap-5">
 

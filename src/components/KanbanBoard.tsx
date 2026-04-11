@@ -49,8 +49,9 @@ export default function KanbanBoard({
   const [status, setStatus] = useState('todo')
   const [saving, setSaving] = useState(false)
 
-  // Single day filter
-  const [filterDay, setFilterDay] = useState('')
+  // Date range filter
+  const [filterFrom, setFilterFrom] = useState('')
+  const [filterTo, setFilterTo] = useState('')
 
   function openNew(col: string) {
     setEditTask(null)
@@ -117,26 +118,30 @@ export default function KanbanBoard({
             {tasks.filter(t => t.status !== 'done').length} abertas · {tasks.filter(t => t.status === 'done').length} concluídas
           </p>
         </div>
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2">
-            <span className="text-xs" style={{ color: 'var(--text-muted)' }}>Filtrar por dia:</span>
-            <input type="date" value={filterDay} onChange={e => setFilterDay(e.target.value)}
-              className="px-3 py-1.5 rounded-lg text-xs text-white outline-none"
-              style={{ background: 'var(--surface-2)', border: '1px solid var(--border)' }} />
-            {filterDay && (
-              <button onClick={() => setFilterDay('')}
-                className="text-xs px-2.5 py-1.5 rounded-lg"
-                style={{ background: 'var(--surface-2)', color: 'var(--text-muted)' }}>
-                ✕
-              </button>
-            )}
-          </div>
-          <button onClick={() => openNew('todo')}
-            className="px-4 py-2 rounded-lg text-sm font-semibold text-white"
-            style={{ background: 'var(--accent)' }}>
-            + Nova tarefa
+        <button onClick={() => openNew('todo')}
+          className="px-4 py-2 rounded-lg text-sm font-semibold text-white"
+          style={{ background: 'var(--accent)' }}>
+          + Nova tarefa
+        </button>
+      </div>
+
+      {/* Date range filter */}
+      <div className="px-6 py-3 border-b flex items-center gap-3 shrink-0" style={{ borderColor: 'var(--border)' }}>
+        <span className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>Filtrar por data:</span>
+        <input type="date" value={filterFrom} onChange={e => setFilterFrom(e.target.value)}
+          className="px-3 py-1.5 rounded-lg text-xs text-white outline-none"
+          style={{ background: 'var(--surface-2)', border: '1px solid var(--border)' }} />
+        <span className="text-xs" style={{ color: 'var(--text-muted)' }}>até</span>
+        <input type="date" value={filterTo} onChange={e => setFilterTo(e.target.value)}
+          className="px-3 py-1.5 rounded-lg text-xs text-white outline-none"
+          style={{ background: 'var(--surface-2)', border: '1px solid var(--border)' }} />
+        {(filterFrom || filterTo) && (
+          <button onClick={() => { setFilterFrom(''); setFilterTo('') }}
+            className="text-xs px-2.5 py-1 rounded-lg"
+            style={{ background: 'var(--surface-2)', color: 'var(--text-muted)' }}>
+            Limpar ✕
           </button>
-        </div>
+        )}
       </div>
 
 
@@ -146,8 +151,9 @@ export default function KanbanBoard({
           {COLUMNS.map(col => {
             const colTasks = tasks.filter(t => {
               if (t.status !== col.id) return false
-              if (!filterDay) return true
-              return t.due_date === filterDay
+              if (!filterFrom && !filterTo) return true
+              const d = t.due_date || ''
+              return (!filterFrom || d >= filterFrom) && (!filterTo || d <= filterTo)
             })
             const isOver = dragOver === col.id
             return (

@@ -3,7 +3,7 @@ import HomeDashboard from '@/components/HomeDashboard'
 import HomeDesigner from '@/components/HomeDesigner'
 import HomeSocialMedia from '@/components/HomeSocialMedia'
 import HomeFinanceiro from '@/components/HomeFinanceiro'
-import type { Client, Task, Meeting, Profile, Invoice, Expense, Post } from '@/types/database'
+import type { Client, Task, Meeting, Profile, Invoice, Expense, Post, PaymentSchedule } from '@/types/database'
 
 export default async function DashboardPage() {
   const supabase = await createClient()
@@ -25,6 +25,7 @@ export default async function DashboardPage() {
     { data: rawExpenses },
     { data: rawProfiles },
     { data: rawPosts },
+    { data: rawSchedules },
   ] = await Promise.all([
     supabase.from('profiles').select('*').eq('id', user!.id).single(),
     supabase.from('clients').select('*').order('name'),
@@ -34,6 +35,8 @@ export default async function DashboardPage() {
     supabase.from('expenses').select('*').order('date', { ascending: false }),
     supabase.from('profiles').select('id, name, avatar_color, role').order('name'),
     supabase.from('posts').select('*').order('publish_date', { ascending: true }),
+    // RLS garante que só role=financeiro recebe dados
+    supabase.from('payment_schedules').select('*, clients(name, status)').order('payment_day', { ascending: true }),
   ])
 
   const profile = rawProfile as Profile | null
@@ -44,6 +47,8 @@ export default async function DashboardPage() {
   const allExpenses = (rawExpenses as Expense[]) ?? []
   const allProfiles = (rawProfiles as Pick<Profile, 'id' | 'name' | 'avatar_color' | 'role'>[]) ?? []
   const allPosts = (rawPosts as Post[]) ?? []
+  type ScheduleWithClient = PaymentSchedule & { clients: { name: string; status: string } | null }
+  const allSchedules = (rawSchedules as ScheduleWithClient[]) ?? []
 
   const myClients = profile?.role === 'admin'
     ? allClients
@@ -84,7 +89,7 @@ export default async function DashboardPage() {
     case 'social_media':
       return <HomeSocialMedia {...sharedProps} myPosts={myPosts} allClients={allClients} weekEndStr={weekEndStr} />
     case 'financeiro':
-      return <HomeFinanceiro {...sharedProps} allInvoices={allInvoices} allExpenses={allExpenses} />
+      return <HomeFinanceiro {...sharedProps} allInvoices={allInvoices} allExpenses={allExpenses} paymentSchedules={allSchedules} />
     default:
       return <HomeDashboard {...sharedProps} allProfiles={allProfiles} allClients={allClients} allPosts={allPosts} allTasks={allTasks} />
   }

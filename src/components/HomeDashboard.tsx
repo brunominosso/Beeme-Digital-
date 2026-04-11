@@ -318,6 +318,7 @@ function GestorView({ profile, myClients, allTasks, upcomingMeetings, todayStr, 
   const [tSaving, setTSaving] = useState(false)
   const [editingTask, setEditingTask] = useState<Task | null>(null)
   const [tTime, setTTime] = useState('')
+  const [weekOffset, setWeekOffset] = useState(0)
 
   const roleColor = ROLE_COLORS[profile.role] || 'var(--accent)'
   const roleLabel = ROLE_LABELS[profile.role] || profile.role
@@ -572,8 +573,15 @@ function GestorView({ profile, myClients, allTasks, upcomingMeetings, todayStr, 
 
         {/* Semana: kanban por dia */}
         {taskTab === 'semana' ? (() => {
+          const weekStart = new Date(todayStr + 'T12:00:00')
+          weekStart.setDate(weekStart.getDate() + weekOffset * 7)
+          const weekStartStr = weekStart.toISOString().split('T')[0]
+          const weekEndDate = new Date(weekStart)
+          weekEndDate.setDate(weekEndDate.getDate() + 6)
+          const weekLabel = `${weekStart.toLocaleDateString('pt-PT', { day: 'numeric', month: 'short' })} – ${weekEndDate.toLocaleDateString('pt-PT', { day: 'numeric', month: 'short' })}`
+
           const weekDays = Array.from({ length: 7 }, (_, i) => {
-            const d = new Date(todayStr + 'T12:00:00')
+            const d = new Date(weekStart)
             d.setDate(d.getDate() + i)
             const ds = d.toISOString().split('T')[0]
             const dow = d.getDay()
@@ -591,8 +599,23 @@ function GestorView({ profile, myClients, allTasks, upcomingMeetings, todayStr, 
             return { ds, label, isToday, dayTasks, dow }
           })
           return (
-            <div className="p-4 overflow-x-auto">
-              <div className="flex gap-3 min-w-max">
+            <div className="p-4">
+              {/* Nav semana */}
+              <div className="flex items-center gap-3 mb-3">
+                <button onClick={() => setWeekOffset(w => w - 1)}
+                  className="p-1.5 rounded-lg text-sm" style={{ background: 'var(--surface-2)', color: 'var(--text-muted)' }}>‹</button>
+                <span className="text-xs font-medium" style={{ color: 'var(--cream)' }}>{weekLabel}</span>
+                <button onClick={() => setWeekOffset(w => w + 1)}
+                  className="p-1.5 rounded-lg text-sm" style={{ background: 'var(--surface-2)', color: 'var(--text-muted)' }}>›</button>
+                {weekOffset !== 0 && (
+                  <button onClick={() => setWeekOffset(0)}
+                    className="text-xs px-2.5 py-1 rounded-lg ml-1"
+                    style={{ background: 'var(--surface-2)', color: 'var(--accent)' }}>
+                    Esta semana
+                  </button>
+                )}
+              </div>
+              <div className="flex gap-3 overflow-x-auto pb-2 min-w-0">
                 {weekDays.map(day => (
                   <div key={day.ds} className="w-48 flex flex-col rounded-xl"
                     style={{ background: 'var(--surface-2)', border: `1px solid ${day.isToday ? 'var(--accent)' : 'var(--border)'}` }}>

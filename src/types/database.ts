@@ -414,6 +414,39 @@ export interface Database {
         }
         Relationships: []
       }
+      payment_schedules: {
+        Row: {
+          id: string
+          client_id: string
+          description: string
+          amount: number
+          payment_day: number
+          active: boolean
+          notes: string | null
+          created_by: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          client_id: string
+          description?: string
+          amount: number
+          payment_day: number
+          active?: boolean
+          notes?: string | null
+          created_by?: string | null
+        }
+        Update: {
+          description?: string
+          amount?: number
+          payment_day?: number
+          active?: boolean
+          notes?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
       posts: {
         Row: {
@@ -484,3 +517,4 @@ export type Objective = Database['public']['Tables']['objectives']['Row']
 export type KeyResult = Database['public']['Tables']['key_results']['Row']
 export type Service = Database['public']['Tables']['services']['Row']
 export type Post = Database['public']['Tables']['posts']['Row']
+export type PaymentSchedule = Database['public']['Tables']['payment_schedules']['Row']
