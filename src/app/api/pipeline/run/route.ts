@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { z } from 'zod'
 import Anthropic from '@anthropic-ai/sdk'
 import { createClient } from '@/lib/supabase/server'
+import { rateLimit, getIP } from '@/lib/rate-limit'
 import {
   nunoPrompt,
   carlosAnglesPrompt,
@@ -16,25 +18,48 @@ const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
 type RunWithClient = Run & { clients: Client }
 
-export async function POST(req: NextRequest) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
-  const body = await req.json()
-  const { runId, step, input } = body as {
-    runId: string
-    step: number
-    input: Record<string, string>
+const bodySchema = z.object({
+  runId: z.string().regex(UUID_REGEX, 'runId inválido'),
+  step: z.number().int().min(1).max(7),
+  input: z.record(z.string(), z.string().max(50000)).default({}),
+})
+
+export async function POST(req: NextRequest) {
+  // Rate limit: 20 chamadas por minuto por IP
+  const ip = getIP(req)
+  const rl = rateLimit(`pipeline:${ip}`, { limit: 20, windowSec: 60 })
+  if (!rl.success) {
+    return NextResponse.json(
+      { error: 'Muitas requisições. Tente novamente em instantes.' },
+      { status: 429, headers: { 'Retry-After': String(Math.ceil((rl.resetAt - Date.now()) / 1000)) } }
+    )
   }
 
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
+
+  // Valida body com Zod
+  let body: z.infer<typeof bodySchema>
+  try {
+    body = bodySchema.parse(await req.json())
+  } catch {
+    return NextResponse.json({ error: 'Dados inválidos' }, { status: 400 })
+  }
+
+  const { runId, step, input } = body
+
+  // Busca o run verificando ownership: só retorna se pertence ao usuário autenticado
   const { data: rawRun } = await supabase
     .from('runs')
     .select('*, clients(*)')
     .eq('id', runId)
+    .eq('user_id', user.id)  // ← ownership check
     .single()
 
-  if (!rawRun) return NextResponse.json({ error: 'Run not found' }, { status: 404 })
+  if (!rawRun) return NextResponse.json({ error: 'Não encontrado' }, { status: 404 })
 
   const run = rawRun as unknown as RunWithClient
   const client = run.clients
@@ -48,42 +73,42 @@ export async function POST(req: NextRequest) {
     2: {
       name: 'Geração de ângulos',
       agent: 'Carlos Conteúdo',
-      getPrompt: () => carlosAnglesPrompt(client, input.newsBriefing),
+      getPrompt: () => carlosAnglesPrompt(client, input.newsBriefing ?? ''),
     },
     3: {
       name: 'Roteiro do carrossel',
       agent: 'Carlos Conteúdo',
-      getPrompt: () => carlosCarouselPrompt(client, input.selectedNews, input.selectedAngle),
+      getPrompt: () => carlosCarouselPrompt(client, input.selectedNews ?? '', input.selectedAngle ?? ''),
     },
     4: {
       name: 'Humanização do copy',
       agent: 'Vítor Voz',
-      getPrompt: () => vitorPrompt(client, input.carouselCopy),
+      getPrompt: () => vitorPrompt(client, input.carouselCopy ?? ''),
     },
     5: {
       name: 'Script do Reel',
       agent: 'Rafael Roteiro',
-      getPrompt: () => rafaelPrompt(client, input.carouselHumanized),
+      getPrompt: () => rafaelPrompt(client, input.carouselHumanized ?? ''),
     },
     6: {
       name: 'Sequência de Stories',
       agent: 'Sabrina Sequência',
-      getPrompt: () => sabrinaPrompt(client, input.carouselHumanized),
+      getPrompt: () => sabrinaPrompt(client, input.carouselHumanized ?? ''),
     },
     7: {
       name: 'Revisão de qualidade',
       agent: 'Tereza Tela',
       getPrompt: () => terezaPrompt(
         client,
-        input.carouselHumanized,
-        input.reelScript,
-        input.storiesSequence
+        input.carouselHumanized ?? '',
+        input.reelScript ?? '',
+        input.storiesSequence ?? ''
       ),
     },
   }
 
   const stepConfig = STEPS[step]
-  if (!stepConfig) return NextResponse.json({ error: 'Invalid step' }, { status: 400 })
+  if (!stepConfig) return NextResponse.json({ error: 'Step inválido' }, { status: 400 })
 
   // Create/update step record
   const { data: existingStep } = await supabase
@@ -139,14 +164,16 @@ export async function POST(req: NextRequest) {
 
         controller.enqueue(encoder.encode(`data: ${JSON.stringify({ done: true, output: fullOutput })}\n\n`))
       } catch (err) {
-        const msg = err instanceof Error ? err.message : 'Unknown error'
+        // Log interno — não expõe detalhes ao cliente
+        console.error('[pipeline/run] erro interno:', err)
+
         await supabase
           .from('run_steps')
-          .update({ status: 'failed', output: `Erro: ${msg}` })
+          .update({ status: 'failed', output: 'Erro interno no processamento.' })
           .eq('run_id', runId)
           .eq('step_number', step)
 
-        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: msg })}\n\n`))
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: 'Erro interno. Tente novamente.' })}\n\n`))
       }
 
       controller.close()
