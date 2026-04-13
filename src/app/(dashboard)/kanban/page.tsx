@@ -9,8 +9,8 @@ type TaskWithRelations = Task & {
   profiles: { name: string | null } | null
 }
 
-const SM_STATUSES = ['sm_novo', 'design_fila', 'design_fazendo', 'sm_revisao', 'sm_aprovacao']
-const DESIGNER_STATUSES = ['design_fila', 'design_fazendo']
+const SM_STATUSES = ['sm_novo', 'design_fila', 'design_fazendo', 'cliente_aprovacao', 'sm_revisao', 'sm_aprovacao']
+const DESIGNER_STATUSES = ['design_fila', 'design_fazendo', 'design_ajuste']
 
 export default async function KanbanPage() {
   const supabase = await createClient()

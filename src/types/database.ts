@@ -56,6 +56,7 @@ export interface Database {
           competitors: string | null
           expectations: string | null
           responsible_ids: string[] | null
+          approval_token: string | null
           created_at: string
           updated_at: string
         }
@@ -86,6 +87,7 @@ export interface Database {
           competitors?: string | null
           expectations?: string | null
           responsible_ids?: string[] | null
+          approval_token?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -116,6 +118,7 @@ export interface Database {
           priority: string
           due_date: string | null
           recurrence: string | null
+          approval_notes: string | null
           position: number
           created_at: string
           updated_at: string
@@ -131,6 +134,7 @@ export interface Database {
           priority?: string
           due_date?: string | null
           recurrence?: string | null
+          approval_notes?: string | null
           position?: number
           created_at?: string
           updated_at?: string
@@ -144,6 +148,7 @@ export interface Database {
           priority?: string
           due_date?: string | null
           recurrence?: string | null
+          approval_notes?: string | null
           position?: number
           updated_at?: string
         }

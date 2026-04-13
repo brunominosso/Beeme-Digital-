@@ -6,6 +6,38 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import type { Client, Profile, Meeting, Task } from '@/types/database'
 
+function ApprovalLinkRow({ token }: { token: string }) {
+  const [copied, setCopied] = useState(false)
+  const url = typeof window !== 'undefined'
+    ? `${window.location.origin}/aprovacao/${token}`
+    : `/aprovacao/${token}`
+
+  function copy() {
+    navigator.clipboard.writeText(url).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    })
+  }
+
+  return (
+    <div className="flex items-center gap-2">
+      <input
+        readOnly
+        value={url}
+        className="flex-1 px-3 py-2 rounded-lg text-xs text-white outline-none truncate"
+        style={{ background: 'var(--surface-2)', border: '1px solid var(--border)', color: 'var(--text-muted)' }}
+        onClick={e => (e.target as HTMLInputElement).select()}
+      />
+      <button
+        onClick={copy}
+        className="shrink-0 px-4 py-2 rounded-lg text-xs font-semibold text-white transition-colors"
+        style={{ background: copied ? 'var(--success)' : 'var(--accent)' }}>
+        {copied ? '✓ Copiado' : 'Copiar'}
+      </button>
+    </div>
+  )
+}
+
 const STATUS_MAP: Record<string, { label: string; color: string }> = {
   em_negociacao: { label: 'Em negociação', color: '#6c63ff' },
   onboarding: { label: 'Onboarding', color: '#f59e0b' },
@@ -422,6 +454,18 @@ export default function ClientDetail({
                 <EditableField label="🖼 Logo (URL)" value={client.logo_url} field="logo_url" placeholder="Vazio" />
                 <EditableField label="📁 Link Drive" value={client.drive_link} field="drive_link" placeholder="Vazio" />
               </div>
+            </div>
+
+            {/* Link de aprovação */}
+            <div className="rounded-xl p-5" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+              <h2 className="text-sm font-semibold mb-3" style={{ color: 'var(--text-muted)' }}>LINK DE APROVAÇÃO DO CLIENTE</h2>
+              <p className="text-xs mb-3 leading-relaxed" style={{ color: 'var(--text-muted)' }}>
+                Partilhe este link com o cliente. Sempre que um card for enviado para aprovação, ele aparecerá aqui automaticamente.
+              </p>
+              {client.approval_token
+                ? <ApprovalLinkRow token={client.approval_token} />
+                : <p className="text-xs" style={{ color: 'var(--danger)' }}>Token não gerado — corre o SQL de migração (schema-v12-approval.sql).</p>
+              }
             </div>
 
             <div className="rounded-xl p-5" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>

@@ -39,6 +39,15 @@ const SM_COLUMNS: ColConfig[] = [
     noAdd: true,
   },
   {
+    id: 'aguardando_cliente',
+    label: 'Aguardando Cliente',
+    color: '#f59e0b',
+    displayStatuses: ['cliente_aprovacao'],
+    dropStatus: 'cliente_aprovacao',
+    lockCards: true,
+    noAdd: true,
+  },
+  {
     id: 'sm_revisao',
     label: 'Em Revisão',
     color: '#a855f7',
@@ -73,11 +82,19 @@ const DESIGNER_COLUMNS: ColConfig[] = [
     dropStatus: 'design_fazendo',
   },
   {
-    id: 'design_pronto',
-    label: 'Enviar à Social Media',
+    id: 'design_ajuste',
+    label: 'Para Ajuste',
+    color: '#f97316',
+    displayStatuses: ['design_ajuste'],
+    dropStatus: 'design_ajuste',
+    noAdd: true,
+  },
+  {
+    id: 'enviar_aprovacao',
+    label: 'Enviar para Aprovação',
     color: 'var(--success)',
     displayStatuses: [],
-    dropStatus: 'sm_revisao',
+    dropStatus: 'cliente_aprovacao',
     noAdd: true,
     isDropZone: true,
   },
@@ -219,7 +236,7 @@ export default function KanbanBoard({
     userRole === 'social_media'
       ? `${tasks.filter(t => ['sm_novo', 'sm_revisao'].includes(t.status)).length} para atender · ${tasks.filter(t => t.status === 'sm_aprovacao').length} aprovadas`
       : userRole === 'designer'
-      ? `${tasks.filter(t => t.status === 'design_fila').length} em fila · ${tasks.filter(t => t.status === 'design_fazendo').length} fazendo`
+      ? `${tasks.filter(t => t.status === 'design_fila').length} em fila · ${tasks.filter(t => t.status === 'design_fazendo').length} fazendo · ${tasks.filter(t => t.status === 'design_ajuste').length} para ajuste`
       : `${tasks.filter(t => t.status !== 'done').length} abertas · ${tasks.filter(t => t.status === 'done').length} concluídas`
 
   const boardTitle =
@@ -292,7 +309,9 @@ export default function KanbanBoard({
                     </div>
                     <p className="text-sm font-semibold" style={{ color: col.color }}>{col.label}</p>
                     <p className="text-xs leading-relaxed" style={{ color: 'var(--text-muted)' }}>
-                      Arrasta um card aqui para enviar de volta à Social Media
+                      {col.id === 'enviar_aprovacao'
+                        ? 'Arrasta aqui para enviar ao cliente para aprovação'
+                        : 'Arrasta um card aqui para enviar de volta à Social Media'}
                     </p>
                   </div>
                 </div>
@@ -353,6 +372,19 @@ export default function KanbanBoard({
                           <p className="text-xs mb-2 line-clamp-2" style={{ color: 'var(--text-muted)' }}>
                             {task.description}
                           </p>
+                        )}
+
+                        {/* Nota de ajuste do cliente */}
+                        {(task as any).approval_notes && (
+                          <div className="rounded-lg px-2.5 py-2 mb-2"
+                            style={{ background: '#f9731610', border: '1px solid #f9731625' }}>
+                            <p className="text-xs font-semibold mb-0.5" style={{ color: '#f97316' }}>
+                              💬 Solicitação do cliente
+                            </p>
+                            <p className="text-xs leading-snug" style={{ color: '#fed7aa' }}>
+                              {(task as any).approval_notes}
+                            </p>
+                          </div>
                         )}
 
                         <div className="flex items-center gap-2 flex-wrap">

@@ -1,0 +1,291 @@
+'use client'
+
+import { useState } from 'react'
+import Image from 'next/image'
+
+type ApprovalTask = {
+  id: string
+  title: string
+  description: string | null
+  notes: string | null
+  platform: string | null
+  format: string | null
+  due_date: string | null
+  publish_date: string | null
+  approval_notes: string | null
+  platformLabel: string
+  formatLabel: string
+}
+
+type CardState =
+  | { type: 'idle' }
+  | { type: 'adjusting'; notes: string }
+  | { type: 'loading' }
+  | { type: 'done'; action: 'approve' | 'adjust' }
+
+const PLATFORM_ICON: Record<string, string> = {
+  instagram: '📸',
+  tiktok: '🎵',
+  youtube: '▶️',
+  linkedin: '💼',
+}
+
+export default function ApprovalClient({
+  token,
+  clientName,
+  logoUrl,
+  initialTasks,
+}: {
+  token: string
+  clientName: string
+  logoUrl: string | null
+  initialTasks: ApprovalTask[]
+}) {
+  const [tasks, setTasks] = useState(initialTasks)
+  const [cardStates, setCardStates] = useState<Record<string, CardState>>({})
+
+  function getState(id: string): CardState {
+    return cardStates[id] ?? { type: 'idle' }
+  }
+
+  function setState(id: string, s: CardState) {
+    setCardStates(prev => ({ ...prev, [id]: s }))
+  }
+
+  async function handleApprove(taskId: string) {
+    setState(taskId, { type: 'loading' })
+    const res = await fetch(`/api/approval/${token}/action`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ taskId, action: 'approve' }),
+    })
+    if (res.ok) {
+      setState(taskId, { type: 'done', action: 'approve' })
+      setTimeout(() => setTasks(prev => prev.filter(t => t.id !== taskId)), 1800)
+    } else {
+      const data = await res.json()
+      alert(data.error ?? 'Erro ao aprovar. Tente novamente.')
+      setState(taskId, { type: 'idle' })
+    }
+  }
+
+  async function handleAdjust(taskId: string, notes: string) {
+    if (!notes.trim()) return
+    setState(taskId, { type: 'loading' })
+    const res = await fetch(`/api/approval/${token}/action`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ taskId, action: 'adjust', notes }),
+    })
+    if (res.ok) {
+      setState(taskId, { type: 'done', action: 'adjust' })
+      setTimeout(() => setTasks(prev => prev.filter(t => t.id !== taskId)), 1800)
+    } else {
+      const data = await res.json()
+      alert(data.error ?? 'Erro ao enviar. Tente novamente.')
+      setState(taskId, { type: 'adjusting', notes })
+    }
+  }
+
+  const allDone = tasks.length === 0 && Object.keys(cardStates).length > 0
+
+  return (
+    <div className="min-h-screen" style={{ background: '#0f0f12', color: '#e5e7eb' }}>
+
+      {/* Header */}
+      <div className="px-5 pt-8 pb-6 flex flex-col items-center text-center">
+        {logoUrl ? (
+          <Image
+            src={logoUrl}
+            alt={clientName}
+            width={56}
+            height={56}
+            className="rounded-xl mb-3 object-contain"
+            style={{ background: '#1c1c22' }}
+          />
+        ) : (
+          <div className="w-14 h-14 rounded-xl mb-3 flex items-center justify-center text-2xl font-bold"
+            style={{ background: '#6c63ff20', color: '#6c63ff' }}>
+            {clientName.charAt(0).toUpperCase()}
+          </div>
+        )}
+        <h1 className="text-xl font-bold text-white mb-1">{clientName}</h1>
+        <p className="text-sm" style={{ color: '#9ca3af' }}>
+          Painel de aprovação de conteúdo
+        </p>
+      </div>
+
+      {/* Conteúdo */}
+      <div className="px-4 pb-16 max-w-lg mx-auto">
+
+        {/* Tudo em dia */}
+        {tasks.length === 0 && !allDone && (
+          <div className="rounded-2xl p-8 text-center"
+            style={{ background: '#1c1c22', border: '1px solid #2a2a35' }}>
+            <div className="text-4xl mb-3">🎉</div>
+            <p className="font-semibold text-white mb-1">Nenhum card pendente!</p>
+            <p className="text-sm" style={{ color: '#9ca3af' }}>
+              Você está em dia. Novos conteúdos aparecerão aqui quando estiverem prontos.
+            </p>
+          </div>
+        )}
+
+        {allDone && (
+          <div className="rounded-2xl p-8 text-center"
+            style={{ background: '#1c1c22', border: '1px solid #2a2a35' }}>
+            <div className="text-4xl mb-3">✅</div>
+            <p className="font-semibold text-white mb-1">Tudo avaliado!</p>
+            <p className="text-sm" style={{ color: '#9ca3af' }}>
+              Obrigado pelo retorno. Nossa equipe já foi notificada.
+            </p>
+          </div>
+        )}
+
+        {/* Cards */}
+        {tasks.length > 0 && (
+          <>
+            <p className="text-xs font-semibold uppercase tracking-wider mb-4"
+              style={{ color: '#6b7280' }}>
+              {tasks.length} {tasks.length === 1 ? 'card aguardando' : 'cards aguardando'} sua avaliação
+            </p>
+
+            <div className="space-y-4">
+              {tasks.map(task => {
+                const state = getState(task.id)
+
+                if (state.type === 'done') {
+                  return (
+                    <div key={task.id} className="rounded-2xl p-5 text-center transition-all"
+                      style={{ background: state.action === 'approve' ? '#14532d30' : '#7c2d1230', border: `1px solid ${state.action === 'approve' ? '#16a34a40' : '#ea580c40'}` }}>
+                      <div className="text-2xl mb-1">{state.action === 'approve' ? '✅' : '🔄'}</div>
+                      <p className="text-sm font-medium" style={{ color: state.action === 'approve' ? '#4ade80' : '#fb923c' }}>
+                        {state.action === 'approve' ? 'Aprovado!' : 'Ajuste solicitado!'}
+                      </p>
+                    </div>
+                  )
+                }
+
+                return (
+                  <div key={task.id} className="rounded-2xl overflow-hidden"
+                    style={{ background: '#1c1c22', border: '1px solid #2a2a35' }}>
+
+                    {/* Cabeçalho do card */}
+                    <div className="px-5 pt-5 pb-4">
+                      {/* Plataforma / formato */}
+                      {(task.platformLabel || task.formatLabel) && (
+                        <div className="flex items-center gap-2 mb-3">
+                          {task.platform && (
+                            <span className="text-xs px-2.5 py-1 rounded-full font-medium flex items-center gap-1"
+                              style={{ background: '#6c63ff15', color: '#a78bfa' }}>
+                              {PLATFORM_ICON[task.platform] ?? '📱'} {task.platformLabel}
+                            </span>
+                          )}
+                          {task.formatLabel && (
+                            <span className="text-xs px-2.5 py-1 rounded-full"
+                              style={{ background: '#1e3a2f', color: '#4ade80' }}>
+                              {task.formatLabel}
+                            </span>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Título */}
+                      <h2 className="text-base font-semibold text-white leading-snug mb-2">
+                        {task.title}
+                      </h2>
+
+                      {/* Descrição */}
+                      {task.description && (
+                        <p className="text-sm leading-relaxed mb-2" style={{ color: '#9ca3af' }}>
+                          {task.description}
+                        </p>
+                      )}
+
+                      {/* Observações do designer */}
+                      {task.notes && (
+                        <div className="rounded-xl px-3.5 py-3 mt-3"
+                          style={{ background: '#111116', border: '1px solid #2a2a35' }}>
+                          <p className="text-xs font-semibold uppercase tracking-wider mb-1"
+                            style={{ color: '#6b7280' }}>Obs. da equipe</p>
+                          <p className="text-sm" style={{ color: '#d1d5db' }}>{task.notes}</p>
+                        </div>
+                      )}
+
+                      {/* Data de publicação */}
+                      {(task.publish_date || task.due_date) && (
+                        <p className="text-xs mt-3" style={{ color: '#6b7280' }}>
+                          📅 Publicar em:{' '}
+                          {new Date(((task.publish_date || task.due_date)!) + 'T12:00:00')
+                            .toLocaleDateString('pt-BR', { day: 'numeric', month: 'long' })}
+                        </p>
+                      )}
+                    </div>
+
+                    {/* Área de ajuste */}
+                    {state.type === 'adjusting' && (
+                      <div className="px-5 pb-4" style={{ borderTop: '1px solid #2a2a35' }}>
+                        <p className="text-xs font-semibold uppercase tracking-wider mt-4 mb-2"
+                          style={{ color: '#fb923c' }}>
+                          O que precisa ser ajustado?
+                        </p>
+                        <textarea
+                          autoFocus
+                          value={state.notes}
+                          onChange={e => setState(task.id, { type: 'adjusting', notes: e.target.value })}
+                          placeholder="Descreva o ajuste necessário..."
+                          rows={3}
+                          className="w-full px-4 py-3 rounded-xl text-sm resize-none outline-none text-white"
+                          style={{ background: '#111116', border: '1px solid #3a3a47' }}
+                        />
+                        <div className="flex gap-2 mt-3">
+                          <button
+                            onClick={() => handleAdjust(task.id, state.notes)}
+                            disabled={!state.notes.trim()}
+                            className="flex-1 py-3 rounded-xl text-sm font-semibold text-white disabled:opacity-40"
+                            style={{ background: '#f97316' }}>
+                            Confirmar solicitação
+                          </button>
+                          <button
+                            onClick={() => setState(task.id, { type: 'idle' })}
+                            className="px-4 py-3 rounded-xl text-sm font-semibold"
+                            style={{ background: '#2a2a35', color: '#9ca3af' }}>
+                            Cancelar
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Botões de ação */}
+                    {(state.type === 'idle' || state.type === 'loading') && (
+                      <div className="px-5 pb-5 pt-1 flex gap-3">
+                        <button
+                          onClick={() => handleApprove(task.id)}
+                          disabled={state.type === 'loading'}
+                          className="flex-1 py-3.5 rounded-xl text-sm font-bold text-white disabled:opacity-50 active:scale-95 transition-transform"
+                          style={{ background: '#16a34a' }}>
+                          {state.type === 'loading' ? '...' : '✅ Aprovar'}
+                        </button>
+                        <button
+                          onClick={() => setState(task.id, { type: 'adjusting', notes: '' })}
+                          disabled={state.type === 'loading'}
+                          className="flex-1 py-3.5 rounded-xl text-sm font-bold disabled:opacity-50 active:scale-95 transition-transform"
+                          style={{ background: '#f9731615', color: '#fb923c', border: '1.5px solid #f9731630' }}>
+                          🔄 Solicitar ajuste
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          </>
+        )}
+
+        {/* Rodapé */}
+        <p className="text-center text-xs mt-10" style={{ color: '#4b5563' }}>
+          Este link é exclusivo para {clientName}. Não compartilhe.
+        </p>
+      </div>
+    </div>
+  )
+}
