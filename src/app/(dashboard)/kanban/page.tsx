@@ -16,13 +16,13 @@ export default async function KanbanPage() {
   const supabase = await createClient()
 
   const { data: { user } } = await supabase.auth.getUser()
-  const { data: profileData } = await supabase
+  const { data: rawProfile } = await supabase
     .from('profiles')
-    .select('role')
+    .select('*')
     .eq('id', user!.id)
     .single()
 
-  const userRole = (profileData as unknown as { role: string } | null)?.role ?? 'gestor'
+  const userRole = (rawProfile as any)?.role ?? 'gestor'
 
   let taskQuery = supabase
     .from('tasks')
