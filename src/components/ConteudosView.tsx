@@ -37,16 +37,28 @@ type SimpleProfile = Pick<Profile, 'id' | 'name' | 'avatar_color' | 'role'>
 
 // ─── PostModal ────────────────────────────────────────────────────────────────
 
-function PostModal({ post, clients, profiles, onClose, onSave }: {
+const SM_MODAL_STATUSES = [
+  { key: 'sm_novo',      label: 'Novo',           color: '#6b7280' },
+  { key: 'sm_revisao',   label: 'Em Revisão',     color: '#a855f7' },
+  { key: 'sm_aprovacao', label: 'Aprovação',      color: '#22c55e' },
+]
+const DESIGNER_MODAL_STATUSES = [
+  { key: 'design_fila',    label: 'Em Aberto', color: '#6b7280' },
+  { key: 'design_fazendo', label: 'Fazendo',   color: '#3b82f6' },
+]
+
+function PostModal({ post, clients, profiles, onClose, onSave, userRole }: {
   post: Partial<Post>
   clients: SimpleClient[]
   profiles: SimpleProfile[]
   onClose: () => void
   onSave: (p: Post) => void
+  userRole?: string
 }) {
   const isNew = !post.id
+  const defaultStatus = userRole === 'social_media' ? 'sm_novo' : userRole === 'designer' ? 'design_fila' : 'nao_iniciado'
   const [title,       setTitle]       = useState(post.title ?? '')
-  const [status,      setStatus]      = useState(post.status ?? 'nao_iniciado')
+  const [status,      setStatus]      = useState(post.status ?? defaultStatus)
   const [clientId,    setClientId]    = useState(post.client_id ?? '')
   const [platform,    setPlatform]    = useState(post.platform ?? '')
   const [format,      setFormat]      = useState(post.format ?? '')
@@ -133,7 +145,7 @@ function PostModal({ post, clients, profiles, onClose, onSave }: {
           <div>
             <p className="text-xs mb-2" style={{ color: 'var(--text-muted)' }}>Status</p>
             <div className="flex flex-wrap gap-1.5">
-              {STATUSES.map(s => (
+              {(userRole === 'social_media' ? SM_MODAL_STATUSES : userRole === 'designer' ? DESIGNER_MODAL_STATUSES : STATUSES).map(s => (
                 <button key={s.key} onClick={() => setStatus(s.key)}
                   className="px-2.5 py-1 rounded-full text-xs font-medium transition-all"
                   style={{ background: status === s.key ? s.color + '30' : 'var(--surface-2)', color: status === s.key ? s.color : 'var(--text-muted)', border: `1px solid ${status === s.key ? s.color : 'var(--border)'}` }}>
@@ -758,6 +770,7 @@ export default function ConteudosView({ posts: initial, clients, myClients, prof
           profiles={profiles}
           onClose={() => setShowModal(false)}
           onSave={handleSave}
+          userRole={currentUserRole}
         />
       )}
     </div>
