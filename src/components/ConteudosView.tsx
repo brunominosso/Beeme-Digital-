@@ -514,12 +514,37 @@ function CalendarioView({ posts, clients, myClients, profiles, onEdit, onNew }: 
 
 // ─── KanbanView ───────────────────────────────────────────────────────────────
 
-function KanbanView({ posts: initialPosts, clients, profiles, onEdit }: {
-  posts: Post[]; clients: SimpleClient[]; profiles: SimpleProfile[]; onEdit: (p: Post) => void
+type KanbanCol = {
+  key: string; label: string; color: string
+  displayStatuses: string[]; dropStatus: string
+  lockCards?: boolean; isDropZone?: boolean
+}
+
+const SM_KANBAN_COLS: KanbanCol[] = [
+  { key: 'sm_novo',      label: 'Novo',              color: '#6b7280', displayStatuses: ['sm_novo'],                     dropStatus: 'sm_novo' },
+  { key: 'com_designer', label: 'Com o Designer',    color: '#f59e0b', displayStatuses: ['design_fila','design_fazendo'], dropStatus: 'design_fila', lockCards: true },
+  { key: 'sm_revisao',   label: 'Em Revisão',        color: '#a855f7', displayStatuses: ['sm_revisao'],                  dropStatus: 'sm_revisao' },
+  { key: 'sm_aprovacao', label: 'Aprovação',         color: '#22c55e', displayStatuses: ['sm_aprovacao'],                dropStatus: 'sm_aprovacao' },
+]
+
+const DESIGNER_KANBAN_COLS: KanbanCol[] = [
+  { key: 'design_fila',    label: 'Em Aberto',            color: '#6b7280', displayStatuses: ['design_fila'],    dropStatus: 'design_fila' },
+  { key: 'design_fazendo', label: 'Fazendo',              color: '#3b82f6', displayStatuses: ['design_fazendo'], dropStatus: 'design_fazendo' },
+  { key: 'design_pronto',  label: 'Enviar à Social Media', color: '#22c55e', displayStatuses: [],               dropStatus: 'sm_revisao', isDropZone: true },
+]
+
+function KanbanView({ posts: initialPosts, clients, profiles, onEdit, userRole }: {
+  posts: Post[]; clients: SimpleClient[]; profiles: SimpleProfile[]; onEdit: (p: Post) => void; userRole?: string
 }) {
   const [posts,    setPosts]    = useState(initialPosts)
   const [dragging, setDragging] = useState<string | null>(null)
   const [dragOver, setDragOver] = useState<string | null>(null)
+
+  const isRoleBoard = userRole === 'social_media' || userRole === 'designer'
+  const roleCols: KanbanCol[] | null =
+    userRole === 'social_media' ? SM_KANBAN_COLS :
+    userRole === 'designer'     ? DESIGNER_KANBAN_COLS :
+    null
 
   async function movePost(postId: string, newStatus: string) {
     setPosts(prev => prev.map(p => p.id === postId ? { ...p, status: newStatus } : p))
@@ -527,6 +552,64 @@ function KanbanView({ posts: initialPosts, clients, profiles, onEdit }: {
     await supabase.from('posts').update({ status: newStatus }).eq('id', postId)
   }
 
+  // ── Quadro de role (SM / Designer) ──────────────────────────────────────────
+  if (roleCols) {
+    return (
+      <div className="flex gap-4 overflow-x-auto pb-4">
+        {roleCols.map(col => {
+          const colPosts = posts.filter(p => col.displayStatuses.includes(p.status))
+          const isOver   = dragOver === col.key
+
+          if (col.isDropZone) {
+            return (
+              <div key={col.key} className="shrink-0 w-64 flex flex-col rounded-xl transition-all"
+                style={{ background: isOver ? col.color + '15' : 'transparent', border: `2px dashed ${isOver ? col.color : 'var(--border)'}`, minHeight: '200px' }}
+                onDragOver={e => { e.preventDefault(); setDragOver(col.key) }}
+                onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragOver(null) }}
+                onDrop={e => { e.preventDefault(); if (dragging) movePost(dragging, col.dropStatus); setDragging(null); setDragOver(null) }}>
+                <div className="flex-1 flex flex-col items-center justify-center gap-2 p-6 text-center">
+                  <div className="w-10 h-10 rounded-full flex items-center justify-center text-xl" style={{ background: col.color + '20' }}>↗</div>
+                  <p className="text-sm font-semibold" style={{ color: col.color }}>{col.label}</p>
+                  <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Arrasta aqui para enviar à Social Media</p>
+                </div>
+              </div>
+            )
+          }
+
+          return (
+            <div key={col.key} className="shrink-0 w-64 flex flex-col rounded-xl transition-all"
+              style={{ background: isOver ? col.color + '08' : 'transparent', border: `1px solid ${isOver ? col.color : 'transparent'}`, minHeight: '120px' }}
+              onDragOver={e => { e.preventDefault(); setDragOver(col.key) }}
+              onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragOver(null) }}
+              onDrop={e => { e.preventDefault(); if (dragging) movePost(dragging, col.dropStatus); setDragging(null); setDragOver(null) }}>
+              <div className="flex items-center gap-2 px-1 py-2 mb-1">
+                <div className="w-2.5 h-2.5 rounded-full" style={{ background: col.color }} />
+                <span className="text-xs font-semibold" style={{ color: col.color }}>{col.label}</span>
+                <span className="text-xs ml-auto px-1.5 py-0.5 rounded-full" style={{ background: col.color + '20', color: col.color }}>{colPosts.length}</span>
+              </div>
+              <div className="space-y-2 flex-1 p-1">
+                {colPosts.map(p => (
+                  <div key={p.id}
+                    draggable={!col.lockCards}
+                    onDragStart={!col.lockCards ? () => setDragging(p.id) : undefined}
+                    onDragEnd={!col.lockCards ? () => { setDragging(null); setDragOver(null) } : undefined}
+                    style={{ opacity: dragging === p.id ? 0.4 : 1, cursor: col.lockCards ? 'default' : 'grab' }}>
+                    <PostCard post={p} clients={clients} profiles={profiles} onClick={() => onEdit(p)} />
+                  </div>
+                ))}
+                {isOver && colPosts.length === 0 && (
+                  <div className="rounded-xl border-2 border-dashed h-16 flex items-center justify-center text-xs"
+                    style={{ borderColor: col.color, color: col.color }}>Largar aqui</div>
+                )}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    )
+  }
+
+  // ── Quadro admin/editor (colunas originais) ──────────────────────────────────
   return (
     <div className="flex gap-4 overflow-x-auto pb-4">
       {STATUSES.map(col => {
@@ -569,12 +652,13 @@ function KanbanView({ posts: initialPosts, clients, profiles, onEdit }: {
 
 // ─── ConteudosView (main) ─────────────────────────────────────────────────────
 
-export default function ConteudosView({ posts: initial, clients, myClients, profiles, currentUserId, isAdmin }: {
+export default function ConteudosView({ posts: initial, clients, myClients, profiles, currentUserId, currentUserRole, isAdmin }: {
   posts: Post[]
   clients: SimpleClient[]
   myClients: SimpleClient[]
   profiles: SimpleProfile[]
   currentUserId: string
+  currentUserRole?: string
   isAdmin?: boolean
 }) {
   const [posts,          setPosts]          = useState(initial)
@@ -664,7 +748,7 @@ export default function ConteudosView({ posts: initial, clients, myClients, prof
           onNew={openNew}
         />
       ) : (
-        <KanbanView posts={filteredByPerson} clients={clients} profiles={profiles} onEdit={openEdit} />
+        <KanbanView posts={filteredByPerson} clients={clients} profiles={profiles} onEdit={openEdit} userRole={currentUserRole} />
       )}
 
       {showModal && (

@@ -12,8 +12,15 @@ export default async function ConteudosPage() {
   const role = (profile as Profile | null)?.role ?? 'gestor'
   if (!['admin', 'social_media', 'designer', 'editor'].includes(role)) redirect('/')
 
+  const SM_STATUSES   = ['sm_novo', 'design_fila', 'design_fazendo', 'sm_revisao', 'sm_aprovacao']
+  const DES_STATUSES  = ['design_fila', 'design_fazendo']
+
   const postsQuery = role === 'admin'
     ? supabase.from('posts').select('*').order('publish_date', { ascending: true })
+    : role === 'designer'
+    ? supabase.from('posts').select('*').in('status', DES_STATUSES).order('publish_date', { ascending: true })
+    : role === 'social_media'
+    ? supabase.from('posts').select('*').in('status', SM_STATUSES).contains('assignee_ids', [user.id]).order('publish_date', { ascending: true })
     : supabase.from('posts').select('*').contains('assignee_ids', [user.id]).order('publish_date', { ascending: true })
 
   const [{ data: rawPosts }, { data: rawClients }, { data: rawProfiles }] = await Promise.all([
@@ -36,6 +43,7 @@ export default async function ConteudosPage() {
       myClients={myClients}
       profiles={(rawProfiles as Pick<Profile, 'id' | 'name' | 'avatar_color' | 'role'>[]) ?? []}
       currentUserId={user.id}
+      currentUserRole={role}
       isAdmin={role === 'admin'}
     />
   )
