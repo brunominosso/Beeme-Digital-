@@ -12,10 +12,10 @@ export default async function ConteudosPage() {
   const role = (profile as Profile | null)?.role ?? 'gestor'
   if (!['admin', 'social_media', 'designer', 'editor'].includes(role)) redirect('/')
 
-  const SM_STATUSES   = ['sm_novo', 'design_fila', 'design_fazendo', 'sm_revisao', 'sm_aprovacao']
+  const SM_STATUSES   = ['sm_novo', 'design_fila', 'design_fazendo', 'sm_revisao', 'sm_aprovacao', 'sm_aprovado']
   const DES_STATUSES  = ['design_fila', 'design_fazendo']
 
-  const ALL_NEW_STATUSES = ['sm_novo', 'design_fila', 'design_fazendo', 'sm_revisao', 'sm_aprovacao']
+  const ALL_NEW_STATUSES = ['sm_novo', 'design_fila', 'design_fazendo', 'sm_revisao', 'sm_aprovacao', 'sm_aprovado', 'sm_postado']
 
   const postsQuery = role === 'admin'
     ? supabase.from('posts').select('*').in('status', ALL_NEW_STATUSES).order('publish_date', { ascending: true })

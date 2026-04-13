@@ -38,9 +38,10 @@ type SimpleProfile = Pick<Profile, 'id' | 'name' | 'avatar_color' | 'role'>
 // ─── PostModal ────────────────────────────────────────────────────────────────
 
 const SM_MODAL_STATUSES = [
-  { key: 'sm_novo',      label: 'Novo',           color: '#6b7280' },
-  { key: 'sm_revisao',   label: 'Em Revisão',     color: '#a855f7' },
-  { key: 'sm_aprovacao', label: 'Aprovação',      color: '#22c55e' },
+  { key: 'sm_novo',      label: 'Novo',       color: '#6b7280' },
+  { key: 'sm_revisao',   label: 'Em Revisão', color: '#a855f7' },
+  { key: 'sm_aprovacao', label: 'Aprovação',  color: '#22c55e' },
+  { key: 'sm_aprovado',  label: 'Aprovado',   color: '#10b981' },
 ]
 const DESIGNER_MODAL_STATUSES = [
   { key: 'design_fila',    label: 'Em Aberto', color: '#6b7280' },
@@ -537,6 +538,8 @@ const SM_KANBAN_COLS: KanbanCol[] = [
   { key: 'com_designer', label: 'Com o Designer',    color: '#f59e0b', displayStatuses: ['design_fila','design_fazendo'], dropStatus: 'design_fila', lockCards: true },
   { key: 'sm_revisao',   label: 'Em Revisão',        color: '#a855f7', displayStatuses: ['sm_revisao'],                  dropStatus: 'sm_revisao' },
   { key: 'sm_aprovacao', label: 'Aprovação',         color: '#22c55e', displayStatuses: ['sm_aprovacao'],                dropStatus: 'sm_aprovacao' },
+  { key: 'sm_aprovado',  label: 'Aprovado',          color: '#10b981', displayStatuses: ['sm_aprovado'],                 dropStatus: 'sm_aprovado' },
+  { key: 'sm_postado',   label: 'Postado',           color: '#6366f1', displayStatuses: [],                              dropStatus: 'sm_postado', isDropZone: true },
 ]
 
 const DESIGNER_KANBAN_COLS: KanbanCol[] = [
@@ -557,6 +560,8 @@ function KanbanView({ posts: initialPosts, clients, profiles, onEdit, userRole }
     { key: 'com_designer', label: 'Com o Designer',    color: '#f59e0b', displayStatuses: ['design_fila','design_fazendo'], dropStatus: 'design_fila' },
     { key: 'sm_revisao',   label: 'Em Revisão',        color: '#a855f7', displayStatuses: ['sm_revisao'],                  dropStatus: 'sm_revisao' },
     { key: 'sm_aprovacao', label: 'Aprovação',         color: '#22c55e', displayStatuses: ['sm_aprovacao'],                dropStatus: 'sm_aprovacao' },
+    { key: 'sm_aprovado',  label: 'Aprovado',          color: '#10b981', displayStatuses: ['sm_aprovado'],                 dropStatus: 'sm_aprovado' },
+    { key: 'sm_postado',   label: 'Postado',           color: '#6366f1', displayStatuses: ['sm_postado'],                  dropStatus: 'sm_postado' },
   ]
 
   const roleCols: KanbanCol[] | null =
@@ -589,7 +594,7 @@ function KanbanView({ posts: initialPosts, clients, profiles, onEdit, userRole }
                 <div className="flex-1 flex flex-col items-center justify-center gap-2 p-6 text-center">
                   <div className="w-10 h-10 rounded-full flex items-center justify-center text-xl" style={{ background: col.color + '20' }}>↗</div>
                   <p className="text-sm font-semibold" style={{ color: col.color }}>{col.label}</p>
-                  <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Arrasta aqui para enviar à Social Media</p>
+                  <p className="text-xs" style={{ color: 'var(--text-muted)' }}>{col.key === 'sm_postado' ? 'Arrasta aqui para marcar como postado' : 'Arrasta aqui para enviar à Social Media'}</p>
                 </div>
               </div>
             )
