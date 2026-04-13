@@ -56,7 +56,7 @@ function PostModal({ post, clients, profiles, onClose, onSave, userRole }: {
   userRole?: string
 }) {
   const isNew = !post.id
-  const defaultStatus = userRole === 'social_media' ? 'sm_novo' : userRole === 'designer' ? 'design_fila' : 'nao_iniciado'
+  const defaultStatus = userRole === 'designer' ? 'design_fila' : userRole ? 'sm_novo' : 'nao_iniciado'
   const [title,       setTitle]       = useState(post.title ?? '')
   const [status,      setStatus]      = useState(post.status ?? defaultStatus)
   const [clientId,    setClientId]    = useState(post.client_id ?? '')
@@ -145,7 +145,7 @@ function PostModal({ post, clients, profiles, onClose, onSave, userRole }: {
           <div>
             <p className="text-xs mb-2" style={{ color: 'var(--text-muted)' }}>Status</p>
             <div className="flex flex-wrap gap-1.5">
-              {(userRole === 'social_media' ? SM_MODAL_STATUSES : userRole === 'designer' ? DESIGNER_MODAL_STATUSES : STATUSES).map(s => (
+              {(userRole === 'designer' ? DESIGNER_MODAL_STATUSES : userRole ? SM_MODAL_STATUSES : STATUSES).map(s => (
                 <button key={s.key} onClick={() => setStatus(s.key)}
                   className="px-2.5 py-1 rounded-full text-xs font-medium transition-all"
                   style={{ background: status === s.key ? s.color + '30' : 'var(--surface-2)', color: status === s.key ? s.color : 'var(--text-muted)', border: `1px solid ${status === s.key ? s.color : 'var(--border)'}` }}>
@@ -552,10 +552,17 @@ function KanbanView({ posts: initialPosts, clients, profiles, onEdit, userRole }
   const [dragging, setDragging] = useState<string | null>(null)
   const [dragOver, setDragOver] = useState<string | null>(null)
 
-  const isRoleBoard = userRole === 'social_media' || userRole === 'designer'
+  const ADMIN_KANBAN_COLS: KanbanCol[] = [
+    { key: 'sm_novo',      label: 'Novo',              color: '#6b7280', displayStatuses: ['sm_novo'],                     dropStatus: 'sm_novo' },
+    { key: 'com_designer', label: 'Com o Designer',    color: '#f59e0b', displayStatuses: ['design_fila','design_fazendo'], dropStatus: 'design_fila' },
+    { key: 'sm_revisao',   label: 'Em Revisão',        color: '#a855f7', displayStatuses: ['sm_revisao'],                  dropStatus: 'sm_revisao' },
+    { key: 'sm_aprovacao', label: 'Aprovação',         color: '#22c55e', displayStatuses: ['sm_aprovacao'],                dropStatus: 'sm_aprovacao' },
+  ]
+
   const roleCols: KanbanCol[] | null =
     userRole === 'social_media' ? SM_KANBAN_COLS :
     userRole === 'designer'     ? DESIGNER_KANBAN_COLS :
+    userRole === 'admin'        ? ADMIN_KANBAN_COLS :
     null
 
   async function movePost(postId: string, newStatus: string) {

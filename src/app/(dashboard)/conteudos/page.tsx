@@ -15,8 +15,10 @@ export default async function ConteudosPage() {
   const SM_STATUSES   = ['sm_novo', 'design_fila', 'design_fazendo', 'sm_revisao', 'sm_aprovacao']
   const DES_STATUSES  = ['design_fila', 'design_fazendo']
 
+  const ALL_NEW_STATUSES = ['sm_novo', 'design_fila', 'design_fazendo', 'sm_revisao', 'sm_aprovacao']
+
   const postsQuery = role === 'admin'
-    ? supabase.from('posts').select('*').order('publish_date', { ascending: true })
+    ? supabase.from('posts').select('*').in('status', ALL_NEW_STATUSES).order('publish_date', { ascending: true })
     : role === 'designer'
     ? supabase.from('posts').select('*').in('status', DES_STATUSES).order('publish_date', { ascending: true })
     : role === 'social_media'
