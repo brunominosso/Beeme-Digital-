@@ -2,6 +2,8 @@ import { createClient } from '@/lib/supabase/server'
 import KanbanBoard from '@/components/KanbanBoard'
 import type { Task, Client, Profile } from '@/types/database'
 
+export const dynamic = 'force-dynamic'
+
 type TaskWithRelations = Task & {
   clients: { name: string } | null
   profiles: { name: string | null } | null
@@ -20,7 +22,7 @@ export default async function KanbanPage() {
     .eq('id', user!.id)
     .single()
 
-  const userRole = profileData?.role ?? 'gestor'
+  const userRole = (profileData as unknown as { role: string } | null)?.role ?? 'gestor'
 
   let taskQuery = supabase
     .from('tasks')
