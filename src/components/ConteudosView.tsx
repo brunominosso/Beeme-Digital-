@@ -335,6 +335,12 @@ function PostCard({ post, clients, profiles, onClick }: {
       {post.publish_date && (
         <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Publicar até {fmtShort(post.publish_date)}</p>
       )}
+      {(post as any).approval_notes && (
+        <div className="rounded-lg px-2.5 py-2" style={{ background: '#f9731610', border: '1px solid #f9731630' }}>
+          <p className="text-xs font-semibold mb-0.5" style={{ color: '#f97316' }}>💬 Ajuste solicitado</p>
+          <p className="text-xs leading-snug" style={{ color: '#fed7aa' }}>{(post as any).approval_notes}</p>
+        </div>
+      )}
 
       {/* Ficheiros */}
       {(() => {
@@ -534,18 +540,20 @@ type KanbanCol = {
 }
 
 const SM_KANBAN_COLS: KanbanCol[] = [
-  { key: 'sm_novo',      label: 'Novo',              color: '#6b7280', displayStatuses: ['sm_novo'],                     dropStatus: 'sm_novo' },
-  { key: 'com_designer', label: 'Com o Designer',    color: '#f59e0b', displayStatuses: ['design_fila','design_fazendo'], dropStatus: 'design_fila', lockCards: true },
-  { key: 'sm_revisao',   label: 'Em Revisão',        color: '#a855f7', displayStatuses: ['sm_revisao'],                  dropStatus: 'sm_revisao' },
-  { key: 'sm_aprovacao', label: 'Aprovação',         color: '#22c55e', displayStatuses: ['sm_aprovacao'],                dropStatus: 'sm_aprovacao' },
-  { key: 'sm_aprovado',  label: 'Aprovado',          color: '#10b981', displayStatuses: ['sm_aprovado'],                 dropStatus: 'sm_aprovado' },
-  { key: 'sm_postado',   label: 'Postado',           color: '#6366f1', displayStatuses: [],                              dropStatus: 'sm_postado', isDropZone: true },
+  { key: 'sm_novo',             label: 'Novo',                       color: '#6b7280', displayStatuses: ['sm_novo'],                     dropStatus: 'sm_novo' },
+  { key: 'com_designer',        label: 'Com o Designer',             color: '#f59e0b', displayStatuses: ['design_fila','design_fazendo'], dropStatus: 'design_fila', lockCards: true },
+  { key: 'sm_revisao',          label: 'Em Revisão',                 color: '#a855f7', displayStatuses: ['sm_revisao'],                  dropStatus: 'sm_revisao' },
+  { key: 'enviar_aprovacao',    label: 'Enviar para Aprovação',      color: '#f97316', displayStatuses: [],                              dropStatus: 'cliente_aprovacao', isDropZone: true },
+  { key: 'aguardando_cliente',  label: 'Aguardando Cliente',         color: '#f59e0b', displayStatuses: ['cliente_aprovacao'],           dropStatus: 'cliente_aprovacao', lockCards: true },
+  { key: 'sm_aprovado',         label: 'Aprovado',                   color: '#10b981', displayStatuses: ['sm_aprovado'],                 dropStatus: 'sm_aprovado' },
+  { key: 'sm_postado',          label: 'Postado',                    color: '#6366f1', displayStatuses: [],                              dropStatus: 'sm_postado', isDropZone: true },
 ]
 
 const DESIGNER_KANBAN_COLS: KanbanCol[] = [
-  { key: 'design_fila',    label: 'Em Aberto',            color: '#6b7280', displayStatuses: ['design_fila'],    dropStatus: 'design_fila' },
-  { key: 'design_fazendo', label: 'Fazendo',              color: '#3b82f6', displayStatuses: ['design_fazendo'], dropStatus: 'design_fazendo' },
-  { key: 'design_pronto',  label: 'Enviar à Social Media', color: '#22c55e', displayStatuses: [],               dropStatus: 'sm_revisao', isDropZone: true },
+  { key: 'design_fila',    label: 'Em Aberto',             color: '#6b7280', displayStatuses: ['design_fila'],    dropStatus: 'design_fila' },
+  { key: 'design_fazendo', label: 'Fazendo',               color: '#3b82f6', displayStatuses: ['design_fazendo'], dropStatus: 'design_fazendo' },
+  { key: 'design_ajuste',  label: 'Para Ajuste',           color: '#f97316', displayStatuses: ['design_ajuste'],  dropStatus: 'design_ajuste' },
+  { key: 'design_pronto',  label: 'Enviar à Social Media', color: '#22c55e', displayStatuses: [],                 dropStatus: 'sm_revisao', isDropZone: true },
 ]
 
 function KanbanView({ posts: initialPosts, clients, profiles, onEdit, userRole }: {
@@ -594,7 +602,13 @@ function KanbanView({ posts: initialPosts, clients, profiles, onEdit, userRole }
                 <div className="flex-1 flex flex-col items-center justify-center gap-2 p-6 text-center">
                   <div className="w-10 h-10 rounded-full flex items-center justify-center text-xl" style={{ background: col.color + '20' }}>↗</div>
                   <p className="text-sm font-semibold" style={{ color: col.color }}>{col.label}</p>
-                  <p className="text-xs" style={{ color: 'var(--text-muted)' }}>{col.key === 'sm_postado' ? 'Arrasta aqui para marcar como postado' : 'Arrasta aqui para enviar à Social Media'}</p>
+                  <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                    {col.key === 'enviar_aprovacao'
+                      ? 'Arrasta aqui para enviar ao cliente para aprovação'
+                      : col.key === 'sm_postado'
+                      ? 'Arrasta aqui para marcar como postado'
+                      : 'Arrasta aqui para enviar à Social Media'}
+                  </p>
                 </div>
               </div>
             )

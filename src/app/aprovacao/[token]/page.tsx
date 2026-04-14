@@ -4,21 +4,6 @@ import ApprovalClient from './ApprovalClient'
 
 export const dynamic = 'force-dynamic'
 
-const PLATFORM_LABEL: Record<string, string> = {
-  instagram: 'Instagram',
-  tiktok: 'TikTok',
-  youtube: 'YouTube',
-  linkedin: 'LinkedIn',
-}
-
-const FORMAT_LABEL: Record<string, string> = {
-  reels_short: 'Reels',
-  carrossel: 'Carrossel',
-  imagem_unica: 'Imagem',
-  stories: 'Stories',
-  video: 'Vídeo',
-}
-
 function adminClient() {
   return createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -44,22 +29,26 @@ export default async function ApprovalPage({
 
   if (!client) notFound()
 
-  // Busca cards em aprovação para este cliente
-  const { data: tasks } = await supabase
-    .from('tasks')
-    .select('id, title, description, due_date, approval_notes')
+  // Busca posts em aprovação para este cliente
+  const { data: posts } = await supabase
+    .from('posts')
+    .select('id, title, notes, platform, format, due_date, publish_date, approval_notes')
     .eq('client_id', client.id)
     .eq('status', 'cliente_aprovacao')
     .order('created_at')
 
-  const pendingTasks = (tasks ?? []).map(t => ({
-    ...t,
-    platform: null,
-    format: null,
-    notes: null,
-    publish_date: null,
-    platformLabel: '',
-    formatLabel: '',
+  const pendingTasks = (posts ?? []).map(p => ({
+    id: p.id,
+    title: p.title,
+    description: null,
+    notes: p.notes ?? null,
+    platform: p.platform ?? null,
+    format: p.format ?? null,
+    due_date: p.due_date ?? null,
+    publish_date: p.publish_date ?? null,
+    approval_notes: p.approval_notes ?? null,
+    platformLabel: p.platform ?? '',
+    formatLabel: p.format ?? '',
   }))
 
   return (

@@ -452,7 +452,6 @@ export interface Database {
         }
         Relationships: []
       }
-    }
       posts: {
         Row: {
           id: string
@@ -468,6 +467,7 @@ export interface Database {
           created_by: string | null
           notes: string | null
           files: { name: string; url: string; type: string; size: number }[] | null
+          approval_notes: string | null
           created_at: string
           updated_at: string
         }
@@ -485,6 +485,7 @@ export interface Database {
           created_by?: string | null
           notes?: string | null
           files?: { name: string; url: string; type: string; size: number }[] | null
+          approval_notes?: string | null
         }
         Update: {
           title?: string
@@ -498,6 +499,7 @@ export interface Database {
           assignee_ids?: string[] | null
           notes?: string | null
           files?: { name: string; url: string; type: string; size: number }[] | null
+          approval_notes?: string | null
           updated_at?: string
         }
         Relationships: []

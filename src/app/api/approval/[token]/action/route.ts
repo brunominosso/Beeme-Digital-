@@ -26,7 +26,6 @@ export async function POST(
     return NextResponse.json({ error: 'Token inválido' }, { status: 400 })
   }
 
-  // Valida body
   let body: z.infer<typeof bodySchema>
   try {
     body = bodySchema.parse(await req.json())
@@ -51,23 +50,23 @@ export async function POST(
     return NextResponse.json({ error: 'Link inválido' }, { status: 404 })
   }
 
-  // Verifica que o card pertence a este cliente e está em aprovação
-  const { data: task } = await supabase
-    .from('tasks')
+  // Verifica que o post pertence a este cliente e está em aprovação
+  const { data: post } = await supabase
+    .from('posts')
     .select('id, client_id, status')
     .eq('id', taskId)
     .eq('client_id', client.id)        // garante que o card é deste cliente
     .eq('status', 'cliente_aprovacao') // só age em cards em aprovação
     .single()
 
-  if (!task) {
+  if (!post) {
     return NextResponse.json({ error: 'Card não encontrado ou não disponível para aprovação' }, { status: 404 })
   }
 
   if (action === 'approve') {
     const { error } = await supabase
-      .from('tasks')
-      .update({ status: 'sm_revisao', approval_notes: null })
+      .from('posts')
+      .update({ status: 'sm_aprovado', approval_notes: null })
       .eq('id', taskId)
 
     if (error) {
@@ -75,7 +74,7 @@ export async function POST(
       return NextResponse.json({ error: 'Erro ao aprovar. Tente novamente.' }, { status: 500 })
     }
 
-    return NextResponse.json({ success: true, newStatus: 'sm_revisao' })
+    return NextResponse.json({ success: true, newStatus: 'sm_aprovado' })
   }
 
   // action === 'adjust'
@@ -84,7 +83,7 @@ export async function POST(
   }
 
   const { error } = await supabase
-    .from('tasks')
+    .from('posts')
     .update({ status: 'design_ajuste', approval_notes: notes.trim() })
     .eq('id', taskId)
 

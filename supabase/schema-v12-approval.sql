@@ -16,6 +16,7 @@ ALTER TABLE clients ALTER COLUMN approval_token SET DEFAULT gen_random_uuid()::t
 
 -- 2. Notas de ajuste (preenchidas pelo cliente ao solicitar ajuste)
 ALTER TABLE tasks ADD COLUMN IF NOT EXISTS approval_notes text;
+ALTER TABLE posts ADD COLUMN IF NOT EXISTS approval_notes text;
 
 -- 3. Índice para lookup rápido por token
 CREATE INDEX IF NOT EXISTS clients_approval_token_idx ON clients(approval_token);
