@@ -23,11 +23,31 @@ export default async function KanbanPage() {
     .single()
 
   const userRole = (rawProfile as any)?.role ?? 'gestor'
+  const currentUserName: string = ((rawProfile as any)?.name ?? '').toLowerCase()
 
   let taskQuery = supabase
     .from('tasks')
     .select('*, clients(name), profiles!tasks_assignee_id_fkey(name)')
     .order('position')
+
+  // Regras de visibilidade e atribuição:
+  // - Admin (bruno) → vê tudo, atribui a todos
+  // - Paloma → vê suas tarefas e de Lorenzo, atribui a si e Lorenzo
+  // - Lorenzo → vê suas tarefas e de Paloma, atribui a si e Paloma
+  // - Todos os outros (Juan, Humberto, Giovanna, desconhecidos) → veem só as próprias tarefas
+  // IMPORTANTE: lógica opt-out — padrão é restrito, só desbloqueia para admin/paloma/lorenzo
+  const isAdmin = currentUserName.includes('bruno')
+  const isPaloma = currentUserName.includes('paloma')
+  const isLorenzo = currentUserName.includes('lorenzo')
+  const isSelfOnly = !isAdmin && !isPaloma && !isLorenzo
+
+  function getAssignableNames(): string[] | null {
+    if (isSelfOnly) return null // não usa nome, usa ID direto abaixo
+    if (isPaloma) return ['paloma', 'lorenzo']
+    if (isLorenzo) return ['lorenzo', 'paloma']
+    return null // admin: sem restrição
+  }
+  const assignableNames = getAssignableNames()
 
   if (userRole === 'social_media') {
     taskQuery = taskQuery.in('status', SM_STATUSES)
@@ -35,18 +55,35 @@ export default async function KanbanPage() {
     taskQuery = taskQuery.in('status', DESIGNER_STATUSES)
   }
 
+  // Filtrar tarefas pelo assignee para usuários restritos
+  console.log('[kanban] user:', user!.id, '| name:', currentUserName, '| isSelfOnly:', isSelfOnly)
+  if (isSelfOnly) {
+    taskQuery = taskQuery.eq('assignee_id', user!.id)
+  }
+
   const [{ data: rawTasks }, { data: rawClients }, { data: rawProfiles }] = await Promise.all([
     taskQuery,
-    supabase.from('clients').select('id, name, status').order('name'),
+    supabase.from('clients').select('id, name, status, responsible_ids').order('name'),
     supabase.from('profiles').select('id, name, avatar_color'),
   ])
 
   return (
     <KanbanBoard
       initialTasks={(rawTasks as TaskWithRelations[]) ?? []}
-      clients={(rawClients as Pick<Client, 'id' | 'name' | 'status'>[]) ?? []}
+      clients={(rawClients as Pick<Client, 'id' | 'name' | 'status' | 'responsible_ids'>[]) ?? []}
       profiles={(rawProfiles as Pick<Profile, 'id' | 'name' | 'avatar_color'>[]) ?? []}
       userRole={userRole}
+      currentUserId={user!.id}
+      hideAssignee={isSelfOnly}
+      assignableProfileIds={
+        isSelfOnly
+          ? [user!.id]  // só pode atribuir a si mesmo, via ID (não depende do nome)
+          : assignableNames === null
+            ? null
+            : (rawProfiles ?? []).filter((p: any) =>
+                assignableNames.some(n => (p.name ?? '').toLowerCase().includes(n))
+              ).map((p: any) => p.id)
+      }
     />
   )
 }
