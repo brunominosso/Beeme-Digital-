@@ -32,7 +32,7 @@ export default async function ApprovalPage({
   // Busca posts em aprovação para este cliente
   const { data: posts } = await supabase
     .from('posts')
-    .select('id, title, notes, platform, format, due_date, publish_date, approval_notes')
+    .select('id, title, notes, platform, format, due_date, publish_date, approval_notes, files')
     .eq('client_id', client.id)
     .eq('status', 'cliente_aprovacao')
     .order('created_at')
@@ -47,6 +47,7 @@ export default async function ApprovalPage({
     due_date: p.due_date ?? null,
     publish_date: p.publish_date ?? null,
     approval_notes: p.approval_notes ?? null,
+    files: (p.files as { name: string; url: string; type: string; size: number }[] | null) ?? [],
     platformLabel: p.platform ?? '',
     formatLabel: p.format ?? '',
   }))

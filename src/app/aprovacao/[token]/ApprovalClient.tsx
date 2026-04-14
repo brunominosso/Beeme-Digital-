@@ -3,6 +3,8 @@
 import { useState } from 'react'
 import Image from 'next/image'
 
+type PostFile = { name: string; url: string; type: string; size: number }
+
 type ApprovalTask = {
   id: string
   title: string
@@ -13,6 +15,7 @@ type ApprovalTask = {
   due_date: string | null
   publish_date: string | null
   approval_notes: string | null
+  files: PostFile[]
   platformLabel: string
   formatLabel: string
 }
@@ -24,12 +27,100 @@ type CardState =
   | { type: 'done'; action: 'approve' | 'adjust' }
 
 const PLATFORM_ICON: Record<string, string> = {
-  instagram: '📸',
-  tiktok: '🎵',
-  youtube: '▶️',
-  linkedin: '💼',
+  instagram: '📸', tiktok: '🎵', youtube: '▶️', linkedin: '💼',
 }
 
+function fmtSize(bytes: number) {
+  return bytes > 1_000_000 ? `${(bytes / 1_000_000).toFixed(1)} MB` : `${Math.round(bytes / 1000)} KB`
+}
+
+function isImage(type: string) { return type.startsWith('image/') }
+function isVideo(type: string) { return type.startsWith('video/') }
+
+// ── Lightbox ──────────────────────────────────────────────────────────────────
+function Lightbox({ url, onClose }: { url: string; onClose: () => void }) {
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ background: 'rgba(0,0,0,0.93)' }}
+      onClick={onClose}>
+      <button
+        className="absolute top-4 right-4 text-white text-2xl font-bold w-10 h-10 flex items-center justify-center rounded-full"
+        style={{ background: 'rgba(255,255,255,0.15)' }}
+        onClick={onClose}>✕</button>
+      <img
+        src={url}
+        alt=""
+        className="max-w-full max-h-full rounded-xl object-contain"
+        style={{ maxHeight: '90vh' }}
+        onClick={e => e.stopPropagation()}
+      />
+    </div>
+  )
+}
+
+// ── FileGrid ──────────────────────────────────────────────────────────────────
+function FileGrid({ files }: { files: PostFile[] }) {
+  const [lightbox, setLightbox] = useState<string | null>(null)
+  const imgs   = files.filter(f => isImage(f.type))
+  const vids   = files.filter(f => isVideo(f.type))
+  const others = files.filter(f => !isImage(f.type) && !isVideo(f.type))
+
+  if (!files.length) return null
+
+  return (
+    <div className="space-y-2">
+      {lightbox && <Lightbox url={lightbox} onClose={() => setLightbox(null)} />}
+
+      {/* Imagens */}
+      {imgs.length > 0 && (
+        <div className={`grid gap-1.5 ${imgs.length === 1 ? 'grid-cols-1' : 'grid-cols-2'}`}>
+          {imgs.map((f, i) => (
+            <div key={i} className="relative rounded-xl overflow-hidden cursor-pointer"
+              style={{ height: imgs.length === 1 ? '220px' : '120px' }}
+              onClick={() => setLightbox(f.url)}>
+              <img src={f.url} alt={f.name} className="w-full h-full object-cover" />
+              {i === 3 && imgs.length > 4 && (
+                <div className="absolute inset-0 flex items-center justify-center text-white font-bold text-lg"
+                  style={{ background: 'rgba(0,0,0,0.55)' }}>
+                  +{imgs.length - 4}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Vídeos */}
+      {vids.map((f, i) => (
+        <a key={i} href={f.url} target="_blank" rel="noreferrer"
+          className="flex items-center gap-3 px-3.5 py-3 rounded-xl"
+          style={{ background: '#111116', border: '1px solid #2a2a35' }}>
+          <span className="text-2xl shrink-0">🎬</span>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium truncate text-white">{f.name}</p>
+            <p className="text-xs" style={{ color: '#6b7280' }}>{fmtSize(f.size)}</p>
+          </div>
+          <span className="text-xs shrink-0 px-2.5 py-1 rounded-full font-semibold"
+            style={{ background: '#6c63ff20', color: '#a78bfa' }}>Abrir ↗</span>
+        </a>
+      ))}
+
+      {/* Outros arquivos */}
+      {others.map((f, i) => (
+        <a key={i} href={f.url} target="_blank" rel="noreferrer"
+          className="flex items-center gap-3 px-3.5 py-3 rounded-xl"
+          style={{ background: '#111116', border: '1px solid #2a2a35' }}>
+          <span className="text-xl shrink-0">📎</span>
+          <p className="text-sm truncate flex-1 text-white">{f.name}</p>
+          <span className="text-xs shrink-0" style={{ color: '#6b7280' }}>{fmtSize(f.size)}</span>
+        </a>
+      ))}
+    </div>
+  )
+}
+
+// ── ApprovalClient ────────────────────────────────────────────────────────────
 export default function ApprovalClient({
   token,
   clientName,
@@ -41,15 +132,15 @@ export default function ApprovalClient({
   logoUrl: string | null
   initialTasks: ApprovalTask[]
 }) {
-  const [tasks, setTasks] = useState(initialTasks)
+  const [tasks, setTasks]           = useState(initialTasks)
   const [cardStates, setCardStates] = useState<Record<string, CardState>>({})
+  const [expanded, setExpanded]     = useState<string | null>(null)
 
-  function getState(id: string): CardState {
-    return cardStates[id] ?? { type: 'idle' }
-  }
+  function getState(id: string): CardState { return cardStates[id] ?? { type: 'idle' } }
+  function setState(id: string, s: CardState) { setCardStates(prev => ({ ...prev, [id]: s })) }
 
-  function setState(id: string, s: CardState) {
-    setCardStates(prev => ({ ...prev, [id]: s }))
+  function toggleExpand(id: string) {
+    setExpanded(prev => prev === id ? null : id)
   }
 
   async function handleApprove(taskId: string) {
@@ -95,14 +186,8 @@ export default function ApprovalClient({
       {/* Header */}
       <div className="px-5 pt-8 pb-6 flex flex-col items-center text-center">
         {logoUrl ? (
-          <Image
-            src={logoUrl}
-            alt={clientName}
-            width={56}
-            height={56}
-            className="rounded-xl mb-3 object-contain"
-            style={{ background: '#1c1c22' }}
-          />
+          <Image src={logoUrl} alt={clientName} width={56} height={56}
+            className="rounded-xl mb-3 object-contain" style={{ background: '#1c1c22' }} />
         ) : (
           <div className="w-14 h-14 rounded-xl mb-3 flex items-center justify-center text-2xl font-bold"
             style={{ background: '#6c63ff20', color: '#6c63ff' }}>
@@ -110,29 +195,24 @@ export default function ApprovalClient({
           </div>
         )}
         <h1 className="text-xl font-bold text-white mb-1">{clientName}</h1>
-        <p className="text-sm" style={{ color: '#9ca3af' }}>
-          Painel de aprovação de conteúdo
-        </p>
+        <p className="text-sm" style={{ color: '#9ca3af' }}>Painel de aprovação de conteúdo</p>
       </div>
 
       {/* Conteúdo */}
       <div className="px-4 pb-16 max-w-lg mx-auto">
 
-        {/* Tudo em dia */}
         {tasks.length === 0 && !allDone && (
-          <div className="rounded-2xl p-8 text-center"
-            style={{ background: '#1c1c22', border: '1px solid #2a2a35' }}>
+          <div className="rounded-2xl p-8 text-center" style={{ background: '#1c1c22', border: '1px solid #2a2a35' }}>
             <div className="text-4xl mb-3">🎉</div>
             <p className="font-semibold text-white mb-1">Nenhum card pendente!</p>
             <p className="text-sm" style={{ color: '#9ca3af' }}>
-              Você está em dia. Novos conteúdos aparecerão aqui quando estiverem prontos.
+              Novos conteúdos aparecerão aqui quando estiverem prontos.
             </p>
           </div>
         )}
 
         {allDone && (
-          <div className="rounded-2xl p-8 text-center"
-            style={{ background: '#1c1c22', border: '1px solid #2a2a35' }}>
+          <div className="rounded-2xl p-8 text-center" style={{ background: '#1c1c22', border: '1px solid #2a2a35' }}>
             <div className="text-4xl mb-3">✅</div>
             <p className="font-semibold text-white mb-1">Tudo avaliado!</p>
             <p className="text-sm" style={{ color: '#9ca3af' }}>
@@ -141,22 +221,25 @@ export default function ApprovalClient({
           </div>
         )}
 
-        {/* Cards */}
         {tasks.length > 0 && (
           <>
-            <p className="text-xs font-semibold uppercase tracking-wider mb-4"
-              style={{ color: '#6b7280' }}>
+            <p className="text-xs font-semibold uppercase tracking-wider mb-4" style={{ color: '#6b7280' }}>
               {tasks.length} {tasks.length === 1 ? 'card aguardando' : 'cards aguardando'} sua avaliação
             </p>
 
             <div className="space-y-4">
               {tasks.map(task => {
-                const state = getState(task.id)
+                const state      = getState(task.id)
+                const isExpanded = expanded === task.id
+                const hasFiles   = task.files.length > 0
 
                 if (state.type === 'done') {
                   return (
-                    <div key={task.id} className="rounded-2xl p-5 text-center transition-all"
-                      style={{ background: state.action === 'approve' ? '#14532d30' : '#7c2d1230', border: `1px solid ${state.action === 'approve' ? '#16a34a40' : '#ea580c40'}` }}>
+                    <div key={task.id} className="rounded-2xl p-5 text-center"
+                      style={{
+                        background: state.action === 'approve' ? '#14532d30' : '#7c2d1230',
+                        border: `1px solid ${state.action === 'approve' ? '#16a34a40' : '#ea580c40'}`,
+                      }}>
                       <div className="text-2xl mb-1">{state.action === 'approve' ? '✅' : '🔄'}</div>
                       <p className="text-sm font-medium" style={{ color: state.action === 'approve' ? '#4ade80' : '#fb923c' }}>
                         {state.action === 'approve' ? 'Aprovado!' : 'Ajuste solicitado!'}
@@ -169,10 +252,13 @@ export default function ApprovalClient({
                   <div key={task.id} className="rounded-2xl overflow-hidden"
                     style={{ background: '#1c1c22', border: '1px solid #2a2a35' }}>
 
-                    {/* Cabeçalho do card */}
-                    <div className="px-5 pt-5 pb-4">
+                    {/* Cabeçalho — clicável para expandir */}
+                    <button
+                      className="w-full text-left px-5 pt-5 pb-4"
+                      onClick={() => toggleExpand(task.id)}>
+
                       {/* Plataforma / formato */}
-                      {(task.platformLabel || task.formatLabel) && (
+                      {(task.platform || task.format) && (
                         <div className="flex items-center gap-2 mb-3">
                           {task.platform && (
                             <span className="text-xs px-2.5 py-1 rounded-full font-medium flex items-center gap-1"
@@ -180,46 +266,68 @@ export default function ApprovalClient({
                               {PLATFORM_ICON[task.platform] ?? '📱'} {task.platformLabel}
                             </span>
                           )}
-                          {task.formatLabel && (
+                          {task.format && (
                             <span className="text-xs px-2.5 py-1 rounded-full"
                               style={{ background: '#1e3a2f', color: '#4ade80' }}>
                               {task.formatLabel}
                             </span>
                           )}
+                          <span className="ml-auto text-xs" style={{ color: '#6b7280' }}>
+                            {isExpanded ? '▲ Fechar' : '▼ Ver conteúdo'}
+                          </span>
                         </div>
                       )}
 
-                      {/* Título */}
-                      <h2 className="text-base font-semibold text-white leading-snug mb-2">
+                      <h2 className="text-base font-semibold text-white leading-snug">
                         {task.title}
                       </h2>
 
-                      {/* Descrição */}
-                      {task.description && (
-                        <p className="text-sm leading-relaxed mb-2" style={{ color: '#9ca3af' }}>
-                          {task.description}
-                        </p>
-                      )}
-
-                      {/* Observações do designer */}
-                      {task.notes && (
-                        <div className="rounded-xl px-3.5 py-3 mt-3"
-                          style={{ background: '#111116', border: '1px solid #2a2a35' }}>
-                          <p className="text-xs font-semibold uppercase tracking-wider mb-1"
-                            style={{ color: '#6b7280' }}>Obs. da equipe</p>
-                          <p className="text-sm" style={{ color: '#d1d5db' }}>{task.notes}</p>
-                        </div>
-                      )}
+                      {/* Preview da primeira imagem quando fechado */}
+                      {!isExpanded && hasFiles && (() => {
+                        const firstImg = task.files.find(f => isImage(f.type))
+                        if (!firstImg) return null
+                        return (
+                          <div className="mt-3 rounded-xl overflow-hidden" style={{ height: '140px' }}>
+                            <img src={firstImg.url} alt="" className="w-full h-full object-cover" />
+                          </div>
+                        )
+                      })()}
 
                       {/* Data de publicação */}
                       {(task.publish_date || task.due_date) && (
-                        <p className="text-xs mt-3" style={{ color: '#6b7280' }}>
+                        <p className="text-xs mt-2" style={{ color: '#6b7280' }}>
                           📅 Publicar em:{' '}
                           {new Date(((task.publish_date || task.due_date)!) + 'T12:00:00')
                             .toLocaleDateString('pt-BR', { day: 'numeric', month: 'long' })}
                         </p>
                       )}
-                    </div>
+                    </button>
+
+                    {/* Conteúdo expandido */}
+                    {isExpanded && (
+                      <div className="px-5 pb-4 space-y-3" style={{ borderTop: '1px solid #2a2a35' }}>
+                        <div className="pt-3">
+                          {/* Todos os arquivos */}
+                          {hasFiles && <FileGrid files={task.files} />}
+
+                          {/* Notas */}
+                          {task.notes && (
+                            <div className="rounded-xl px-3.5 py-3 mt-3"
+                              style={{ background: '#111116', border: '1px solid #2a2a35' }}>
+                              <p className="text-xs font-semibold uppercase tracking-wider mb-1"
+                                style={{ color: '#6b7280' }}>Obs. da equipe</p>
+                              <p className="text-sm" style={{ color: '#d1d5db' }}>{task.notes}</p>
+                            </div>
+                          )}
+
+                          {!hasFiles && !task.notes && (
+                            <p className="text-sm text-center py-4" style={{ color: '#4b5563' }}>
+                              Nenhum arquivo anexado
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    )}
 
                     {/* Área de ajuste */}
                     {state.type === 'adjusting' && (
@@ -281,7 +389,6 @@ export default function ApprovalClient({
           </>
         )}
 
-        {/* Rodapé */}
         <p className="text-center text-xs mt-10" style={{ color: '#4b5563' }}>
           Este link é exclusivo para {clientName}. Não compartilhe.
         </p>
