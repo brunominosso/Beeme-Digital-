@@ -117,10 +117,10 @@ const PRIORITY = {
 
 // Parses description for interactive checklist items
 function parseChecklist(text: string) {
-  const lines = text.split('\n')
+  const lines = text.split(/\r?\n/)
   const items = lines.map(line => {
-    const m = line.match(/^- \[([ x])\] (.+)/)
-    if (m) return { type: 'check' as const, checked: m[1] === 'x', text: m[2] }
+    const m = line.match(/^-\s*\[([ xX])\]\s*(.+)/)
+    if (m) return { type: 'check' as const, checked: m[1].toLowerCase() === 'x', text: m[2].trim() }
     return { type: 'text' as const, text: line, checked: false }
   })
   return {
@@ -137,11 +137,17 @@ export default function KanbanBoard({
   clients,
   profiles,
   userRole = 'gestor',
+  currentUserId,
+  assignableProfileIds,
+  hideAssignee = false,
 }: {
   initialTasks: TaskWithRelations[]
-  clients: Pick<Client, 'id' | 'name' | 'status'>[]
+  clients: Pick<Client, 'id' | 'name' | 'status' | 'responsible_ids'>[]
   profiles: Pick<Profile, 'id' | 'name' | 'avatar_color'>[]
   userRole?: string
+  currentUserId?: string
+  assignableProfileIds?: string[] | null  // null = sem restrição (admin)
+  hideAssignee?: boolean
 }) {
   const columns: ColConfig[] =
     userRole === 'social_media' ? SM_COLUMNS :
@@ -166,6 +172,8 @@ export default function KanbanBoard({
   const [dueTime, setDueTime] = useState('')
   const [status, setStatus] = useState(defaultStatus)
   const [saving, setSaving] = useState(false)
+  const [showRawDescription, setShowRawDescription] = useState(false)
+  const [taskStyle, setTaskStyle] = useState<'simples' | 'checklist'>('simples')
 
   const [filterFrom, setFilterFrom] = useState('')
   const [filterTo, setFilterTo] = useState('')
@@ -180,7 +188,10 @@ export default function KanbanBoard({
   const today = new Date().toISOString().split('T')[0]
 
   // Active clients for template checklist
-  const activeClients = clients.filter(c => c.status === 'ativo' || c.status === 'active')
+  const activeClients = clients.filter(c =>
+    (c.status === 'ativo' || c.status === 'active') &&
+    (!currentUserId || (c.responsible_ids as string[] | null)?.includes(currentUserId))
+  )
 
   function getTaskColumn(task: TaskWithRelations): ColConfig | undefined {
     return columns.find(c => c.displayStatuses.includes(task.status))
@@ -190,12 +201,27 @@ export default function KanbanBoard({
     return !getTaskColumn(task)?.lockCards
   }
 
+  function buildClientChecklist() {
+    return activeClients.map(c => `- [ ] ${c.name}`).join('\n')
+  }
+
+  // Profiles disponíveis para atribuição conforme regras do usuário
+  const assignableProfiles = assignableProfileIds === null || assignableProfileIds === undefined
+    ? profiles
+    : profiles.filter(p => assignableProfileIds.includes(p.id))
+
+  // Se o usuário só pode atribuir a si mesmo, auto-preenche
+  const autoAssigneeId = assignableProfileIds?.length === 1 ? assignableProfileIds[0] : undefined
+
   function openNew(colId: string) {
     const col = columns.find(c => c.id === colId)
     setEditTask(null)
-    setTitle(''); setDescription(''); setClientId(''); setAssigneeId('')
+    setTitle(''); setDescription(''); setClientId('')
+    setAssigneeId(autoAssigneeId ?? '')
     setPriority('medium'); setStartDate(''); setDueDate(''); setDueTime('')
     setStatus(col?.dropStatus ?? defaultStatus)
+    setTaskStyle('simples')
+    setShowRawDescription(false)
     setShowForm(true)
   }
 
@@ -210,7 +236,32 @@ export default function KanbanBoard({
     setDueDate(task.due_date || '')
     setDueTime((task as any).due_time || '')
     setStatus(task.status)
+    const isChecklist = parseChecklist(task.description || '').hasChecklist
+    setTaskStyle(isChecklist ? 'checklist' : 'simples')
+    setShowRawDescription(false)
     setShowForm(true)
+  }
+
+  function switchTaskStyle(style: 'simples' | 'checklist') {
+    setTaskStyle(style)
+    if (style === 'checklist') {
+      const checklist = buildClientChecklist()
+      // Preserva texto já existente que não seja checklist, adiciona clientes
+      const parsed = parseChecklist(description)
+      if (!parsed.hasChecklist) {
+        setDescription(description ? `${description}\n${checklist}` : checklist)
+      }
+      setShowRawDescription(false)
+    }
+  }
+
+  function toggleDescriptionLine(lineIndex: number) {
+    const lines = description.split('\n')
+    const line = lines[lineIndex]
+    const m = line.match(/^- \[([ x])\] (.+)/)
+    if (!m) return
+    lines[lineIndex] = `- [${m[1] === ' ' ? 'x' : ' '}] ${m[2]}`
+    setDescription(lines.join('\n'))
   }
 
   async function handleSave() {
@@ -220,7 +271,7 @@ export default function KanbanBoard({
 
     const payload = {
       title, description: description || null,
-      client_id: clientId || null, assignee_id: assigneeId || null,
+      client_id: clientId || null, assignee_id: assigneeId || autoAssigneeId || null,
       priority,
       start_date: startDate || null,
       due_date: dueDate || null,
@@ -310,6 +361,8 @@ export default function KanbanBoard({
     setDueDate('')
     setDueTime('')
     setStatus(defaultStatus)
+    setTaskStyle('checklist')
+    setShowRawDescription(false)
     setShowTemplates(false)
     setShowForm(true)
   }
@@ -565,8 +618,119 @@ export default function KanbanBoard({
             <input type="text" placeholder="Título *" value={title} onChange={e => setTitle(e.target.value)}
               className={inputClass} style={inputStyle} />
 
-            <textarea placeholder="Descrição (opcional)" value={description} onChange={e => setDescription(e.target.value)}
-              rows={5} className={`${inputClass} resize-y`} style={{ ...inputStyle, minHeight: '120px' }} />
+            {/* Estilo da tarefa */}
+            <div>
+              <p className="text-xs mb-2" style={{ color: 'var(--text-muted)' }}>Estilo da tarefa</p>
+              <div className="flex gap-2">
+                <button onClick={() => switchTaskStyle('simples')}
+                  className="flex-1 py-2 rounded-lg text-xs font-semibold transition-all"
+                  style={{
+                    background: taskStyle === 'simples' ? 'var(--accent)' : 'var(--surface-2)',
+                    color: taskStyle === 'simples' ? '#fff' : 'var(--text-muted)',
+                    border: `1px solid ${taskStyle === 'simples' ? 'var(--accent)' : 'var(--border)'}`,
+                  }}>
+                  Simples
+                </button>
+                <button onClick={() => switchTaskStyle('checklist')}
+                  className="flex-1 py-2 rounded-lg text-xs font-semibold transition-all"
+                  style={{
+                    background: taskStyle === 'checklist' ? 'var(--accent)' : 'var(--surface-2)',
+                    color: taskStyle === 'checklist' ? '#fff' : 'var(--text-muted)',
+                    border: `1px solid ${taskStyle === 'checklist' ? 'var(--accent)' : 'var(--border)'}`,
+                  }}>
+                  ☑ Checklist de clientes
+                  {taskStyle === 'checklist' && activeClients.length > 0 && (
+                    <span className="ml-1.5 opacity-75">({activeClients.length})</span>
+                  )}
+                </button>
+              </div>
+              {taskStyle === 'checklist' && activeClients.length === 0 && (
+                <p className="text-xs mt-1.5" style={{ color: 'var(--danger)' }}>
+                  Nenhum cliente ativo encontrado
+                </p>
+              )}
+            </div>
+
+            {/* Descrição / Checklist interativo */}
+            {(() => {
+              const parsed = parseChecklist(description)
+              if (parsed.hasChecklist && (taskStyle === 'checklist' || !showRawDescription)) {
+                return (
+                  <div className="rounded-xl p-3 space-y-2" style={{ ...inputStyle }}>
+                    {/* Header com progresso */}
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs font-semibold" style={{ color: 'var(--text-muted)' }}>
+                        {parsed.done === parsed.total && parsed.total > 0 ? '✅ Tudo pronto!' : `${parsed.done} de ${parsed.total} concluídos`}
+                      </span>
+                      <button onClick={() => setShowRawDescription(true)}
+                        className="text-xs px-2 py-0.5 rounded"
+                        style={{ color: 'var(--text-muted)', background: 'var(--surface)' }}>
+                        Editar texto
+                      </button>
+                    </div>
+                    {/* Barra de progresso */}
+                    <div className="h-2 rounded-full overflow-hidden mb-3" style={{ background: 'var(--border)' }}>
+                      <div className="h-full rounded-full transition-all duration-500" style={{
+                        background: parsed.done === parsed.total && parsed.total > 0
+                          ? '#22c55e'
+                          : 'var(--accent)',
+                        width: parsed.total > 0 ? `${(parsed.done / parsed.total) * 100}%` : '0%',
+                      }} />
+                    </div>
+                    {/* Itens */}
+                    {parsed.items.map((item, i) => {
+                      if (item.type === 'text') {
+                        return item.text
+                          ? <p key={i} className="text-xs py-0.5" style={{ color: 'var(--text-muted)' }}>{item.text}</p>
+                          : null
+                      }
+                      return (
+                        <label key={i}
+                          className="flex items-center gap-3 px-3 py-2.5 rounded-lg cursor-pointer select-none transition-all"
+                          style={{
+                            background: item.checked ? 'rgba(255,255,255,0.04)' : 'rgba(255,255,255,0.06)',
+                            border: `1px solid ${item.checked ? 'rgba(255,255,255,0.06)' : 'rgba(255,255,255,0.1)'}`,
+                          }}>
+                          {/* Bolinha */}
+                          <div className="w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 transition-all duration-200"
+                            style={{
+                              background: item.checked ? 'var(--accent)' : 'transparent',
+                              borderColor: item.checked ? 'var(--accent)' : 'rgba(255,255,255,0.3)',
+                            }}
+                            onClick={() => toggleDescriptionLine(i)}>
+                            {item.checked && (
+                              <svg width="10" height="8" viewBox="0 0 10 8" fill="none">
+                                <path d="M1 4L3.5 6.5L9 1" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+                              </svg>
+                            )}
+                          </div>
+                          <span className="text-sm flex-1 transition-all duration-200" style={{
+                            color: item.checked ? 'var(--text-muted)' : 'var(--text, #fff)',
+                            textDecoration: item.checked ? 'line-through' : 'none',
+                          }}
+                            onClick={() => toggleDescriptionLine(i)}>
+                            {item.text}
+                          </span>
+                        </label>
+                      )
+                    })}
+                  </div>
+                )
+              }
+              return (
+                <div>
+                  <textarea placeholder="Descrição (opcional)" value={description} onChange={e => setDescription(e.target.value)}
+                    rows={5} className={`${inputClass} resize-y`} style={{ ...inputStyle, minHeight: '120px' }} />
+                  {parseChecklist(description).hasChecklist && (
+                    <button onClick={() => setShowRawDescription(false)}
+                      className="text-xs mt-1 px-2 py-0.5 rounded"
+                      style={{ color: 'var(--accent)' }}>
+                      ← Ver checklist
+                    </button>
+                  )}
+                </div>
+              )
+            })()}
 
             <div className="grid grid-cols-2 gap-3">
               <select value={status} onChange={e => setStatus(e.target.value)} className={inputClass} style={inputStyle}>
@@ -582,12 +746,14 @@ export default function KanbanBoard({
             <div className="grid grid-cols-2 gap-3">
               <select value={clientId} onChange={e => setClientId(e.target.value)} className={inputClass} style={inputStyle}>
                 <option value="">Sem cliente</option>
-                {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                {activeClients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
-              <select value={assigneeId} onChange={e => setAssigneeId(e.target.value)} className={inputClass} style={inputStyle}>
-                <option value="">Sem responsável</option>
-                {profiles.map(p => <option key={p.id} value={p.id}>{p.name || 'Utilizador'}</option>)}
-              </select>
+              {!hideAssignee && (
+                <select value={assigneeId} onChange={e => setAssigneeId(e.target.value)} className={inputClass} style={inputStyle}>
+                  <option value="">Sem responsável</option>
+                  {assignableProfiles.map(p => <option key={p.id} value={p.id}>{p.name || 'Utilizador'}</option>)}
+                </select>
+              )}
             </div>
 
             {/* Datas */}
