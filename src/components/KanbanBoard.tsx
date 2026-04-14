@@ -119,8 +119,8 @@ const PRIORITY = {
 function parseChecklist(text: string) {
   const lines = text.split(/\r?\n/)
   const items = lines.map(line => {
-    const m = line.match(/^-\s*\[([ xX])\]\s*(.+)/)
-    if (m) return { type: 'check' as const, checked: m[1].toLowerCase() === 'x', text: m[2].trim() }
+    const m = line.match(/^-\s*\[([ xX]?)\]\s*(.+)/)
+    if (m) return { type: 'check' as const, checked: (m[1] ?? '').toLowerCase() === 'x', text: m[2].trim() }
     return { type: 'text' as const, text: line, checked: false }
   })
   return {
@@ -184,6 +184,8 @@ export default function KanbanBoard({
   const [loadingTemplates, setLoadingTemplates] = useState(false)
   const [newTemplateName, setNewTemplateName] = useState('')
   const [savingTemplate, setSavingTemplate] = useState(false)
+  const [templateCadenciaAtiva, setTemplateCadenciaAtiva] = useState(false)
+  const [templateCadenciaDia, setTemplateCadenciaDia] = useState(1) // 1=Segunda
 
   const today = new Date().toISOString().split('T')[0]
 
@@ -258,9 +260,16 @@ export default function KanbanBoard({
   function toggleDescriptionLine(lineIndex: number) {
     const lines = description.split('\n')
     const line = lines[lineIndex]
-    const m = line.match(/^- \[([ x])\] (.+)/)
+    const m = line.match(/^-\s*\[([ xX]?)\]\s*(.+)/)
     if (!m) return
-    lines[lineIndex] = `- [${m[1] === ' ' ? 'x' : ' '}] ${m[2]}`
+    const wasDone = (m[1] ?? '').toLowerCase() === 'x'
+    lines[lineIndex] = `- [${wasDone ? ' ' : 'x'}] ${m[2]}`
+    setDescription(lines.join('\n'))
+  }
+
+  function removeDescriptionLine(lineIndex: number) {
+    const lines = description.split('\n')
+    lines.splice(lineIndex, 1)
     setDescription(lines.join('\n'))
   }
 
@@ -334,8 +343,12 @@ export default function KanbanBoard({
       priority,
       assignee_id: assigneeId || null,
       created_by: user?.id,
+      cadencia_ativa: templateCadenciaAtiva,
+      cadencia_dia: templateCadenciaAtiva ? templateCadenciaDia : null,
     })
     setNewTemplateName('')
+    setTemplateCadenciaAtiva(false)
+    setTemplateCadenciaDia(1)
     setSavingTemplate(false)
     await loadTemplates()
   }
@@ -345,6 +358,26 @@ export default function KanbanBoard({
     const supabase = createClient()
     await supabase.from('task_templates').delete().eq('id', id)
     setTemplates(prev => prev.filter(t => t.id !== id))
+  }
+
+  async function toggleTemplateCadencia(template: TaskTemplate, dia: number) {
+    const novaAtiva = !(template.cadencia_ativa)
+    const supabase = createClient()
+    await supabase.from('task_templates').update({
+      cadencia_ativa: novaAtiva,
+      cadencia_dia: novaAtiva ? dia : null,
+    }).eq('id', template.id)
+    setTemplates(prev => prev.map(t =>
+      t.id === template.id
+        ? { ...t, cadencia_ativa: novaAtiva, cadencia_dia: novaAtiva ? dia : null }
+        : t
+    ))
+  }
+
+  async function updateTemplateDia(id: string, dia: number) {
+    const supabase = createClient()
+    await supabase.from('task_templates').update({ cadencia_dia: dia }).eq('id', id)
+    setTemplates(prev => prev.map(t => t.id === id ? { ...t, cadencia_dia: dia } : t))
   }
 
   function applyTemplate(template: TaskTemplate) {
@@ -711,6 +744,14 @@ export default function KanbanBoard({
                             onClick={() => toggleDescriptionLine(i)}>
                             {item.text}
                           </span>
+                          <button
+                            type="button"
+                            onClick={e => { e.preventDefault(); e.stopPropagation(); removeDescriptionLine(i) }}
+                            className="w-5 h-5 flex items-center justify-center rounded-full shrink-0 text-xs transition-opacity opacity-30 hover:opacity-100"
+                            style={{ color: 'var(--danger, #ef4444)' }}
+                            title="Remover da lista">
+                            ✕
+                          </button>
                         </label>
                       )
                     })}
@@ -781,6 +822,43 @@ export default function KanbanBoard({
                 style={inputStyle} />
             </div>
 
+            {/* Recorrência */}
+            <div className="rounded-lg p-3" style={{ background: 'var(--surface-2)', border: '1px solid var(--border)' }}>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs font-medium text-white">Recorrência semanal</p>
+                  {templateCadenciaAtiva && (
+                    <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
+                      Cria automaticamente toda {['domingo','segunda','terça','quarta','quinta','sexta','sábado'][templateCadenciaDia]}
+                    </p>
+                  )}
+                </div>
+                <div
+                  onClick={() => setTemplateCadenciaAtiva(v => !v)}
+                  className="w-8 h-4 rounded-full relative transition-colors shrink-0"
+                  style={{ background: templateCadenciaAtiva ? 'var(--accent)' : 'var(--border)', cursor: 'pointer' }}>
+                  <div className="w-3 h-3 rounded-full absolute top-0.5 transition-all"
+                    style={{ background: '#fff', left: templateCadenciaAtiva ? '17px' : '2px' }} />
+                </div>
+              </div>
+              {templateCadenciaAtiva && (
+                <div className="mt-3 flex items-center gap-2">
+                  <span className="text-xs" style={{ color: 'var(--text-muted)' }}>Dia da semana</span>
+                  <select value={templateCadenciaDia} onChange={e => setTemplateCadenciaDia(Number(e.target.value))}
+                    className="px-2 py-1 rounded-lg text-xs text-white outline-none"
+                    style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+                    <option value={0}>Domingo</option>
+                    <option value={1}>Segunda</option>
+                    <option value={2}>Terça</option>
+                    <option value={3}>Quarta</option>
+                    <option value={4}>Quinta</option>
+                    <option value={5}>Sexta</option>
+                    <option value={6}>Sábado</option>
+                  </select>
+                </div>
+              )}
+            </div>
+
             {/* Salvar como modelo */}
             <div className="rounded-lg p-3 space-y-2" style={{ background: 'var(--surface-2)', border: '1px solid var(--border)' }}>
               <p className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>Salvar como modelo de tarefa</p>
@@ -841,35 +919,77 @@ export default function KanbanBoard({
                   </p>
                 </div>
               ) : (
-                templates.map(template => (
-                  <div key={template.id} className="rounded-lg p-3 flex items-center gap-3"
-                    style={{ background: 'var(--surface-2)', border: '1px solid var(--border)' }}>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-white truncate">{template.title}</p>
-                      {template.description && (
-                        <p className="text-xs mt-0.5 line-clamp-1" style={{ color: 'var(--text-muted)' }}>
-                          {template.description}
-                        </p>
-                      )}
-                      <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
-                        Prioridade: {PRIORITY[template.priority as keyof typeof PRIORITY]?.label ?? template.priority}
-                        {activeClients.length > 0 && ` · ${activeClients.length} clientes ativos`}
-                      </p>
+                templates.map(template => {
+                  const DIAS = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sab']
+                  const diaAtual = template.cadencia_dia ?? 1
+                  return (
+                    <div key={template.id} className="rounded-lg p-3 space-y-2"
+                      style={{ background: 'var(--surface-2)', border: `1px solid ${template.cadencia_ativa ? 'var(--accent)' : 'var(--border)'}` }}>
+                      <div className="flex items-center gap-3">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <p className="text-sm font-medium text-white truncate">{template.title}</p>
+                            {template.cadencia_ativa && (
+                              <span className="text-xs px-1.5 py-0.5 rounded-full shrink-0"
+                                style={{ background: 'var(--accent)20', color: 'var(--accent)', border: '1px solid var(--accent)40' }}>
+                                toda {DIAS[template.cadencia_dia ?? 1]}
+                              </span>
+                            )}
+                          </div>
+                          {template.description && (
+                            <p className="text-xs mt-0.5 line-clamp-1" style={{ color: 'var(--text-muted)' }}>
+                              {template.description}
+                            </p>
+                          )}
+                          <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
+                            Prioridade: {PRIORITY[template.priority as keyof typeof PRIORITY]?.label ?? template.priority}
+                            {activeClients.length > 0 && ` · ${activeClients.length} clientes ativos`}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <button onClick={() => applyTemplate(template)}
+                            className="px-3 py-1.5 rounded-lg text-xs font-semibold text-white"
+                            style={{ background: 'var(--accent)' }}>
+                            Usar
+                          </button>
+                          <button onClick={() => deleteTemplate(template.id)}
+                            className="px-2 py-1.5 rounded-lg text-xs"
+                            style={{ color: 'var(--danger)', background: 'var(--surface)' }}>
+                            ✕
+                          </button>
+                        </div>
+                      </div>
+                      {/* Controle de cadência */}
+                      <div className="flex items-center gap-3 pt-1 border-t" style={{ borderColor: 'var(--border)' }}>
+                        <label className="flex items-center gap-2 cursor-pointer select-none">
+                          <div
+                            onClick={() => toggleTemplateCadencia(template, diaAtual)}
+                            className="w-8 h-4 rounded-full relative transition-colors"
+                            style={{ background: template.cadencia_ativa ? 'var(--accent)' : 'var(--border)', cursor: 'pointer' }}>
+                            <div className="w-3 h-3 rounded-full absolute top-0.5 transition-all"
+                              style={{ background: '#fff', left: template.cadencia_ativa ? '17px' : '2px' }} />
+                          </div>
+                          <span className="text-xs" style={{ color: 'var(--text-muted)' }}>Cadência semanal</span>
+                        </label>
+                        {template.cadencia_ativa && (
+                          <select
+                            value={template.cadencia_dia ?? 1}
+                            onChange={e => updateTemplateDia(template.id, Number(e.target.value))}
+                            className="px-2 py-0.5 rounded-lg text-xs text-white outline-none"
+                            style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+                            <option value={0}>Domingo</option>
+                            <option value={1}>Segunda</option>
+                            <option value={2}>Terça</option>
+                            <option value={3}>Quarta</option>
+                            <option value={4}>Quinta</option>
+                            <option value={5}>Sexta</option>
+                            <option value={6}>Sábado</option>
+                          </select>
+                        )}
+                      </div>
                     </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <button onClick={() => applyTemplate(template)}
-                        className="px-3 py-1.5 rounded-lg text-xs font-semibold text-white"
-                        style={{ background: 'var(--accent)' }}>
-                        Usar
-                      </button>
-                      <button onClick={() => deleteTemplate(template.id)}
-                        className="px-2 py-1.5 rounded-lg text-xs"
-                        style={{ color: 'var(--danger)', background: 'var(--surface)' }}>
-                        ✕
-                      </button>
-                    </div>
-                  </div>
-                ))
+                  )
+                })
               )}
             </div>
           </div>
