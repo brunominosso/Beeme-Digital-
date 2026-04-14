@@ -47,15 +47,19 @@ export default async function ApprovalPage({
   // Busca cards em aprovação para este cliente
   const { data: tasks } = await supabase
     .from('tasks')
-    .select('id, title, description, notes, platform, format, due_date, publish_date, approval_notes')
+    .select('id, title, description, due_date, approval_notes')
     .eq('client_id', client.id)
     .eq('status', 'cliente_aprovacao')
     .order('created_at')
 
   const pendingTasks = (tasks ?? []).map(t => ({
     ...t,
-    platformLabel: PLATFORM_LABEL[t.platform ?? ''] ?? t.platform ?? '',
-    formatLabel: FORMAT_LABEL[t.format ?? ''] ?? t.format ?? '',
+    platform: null,
+    format: null,
+    notes: null,
+    publish_date: null,
+    platformLabel: '',
+    formatLabel: '',
   }))
 
   return (
