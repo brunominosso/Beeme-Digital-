@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import type { Task, Client, Profile } from '@/types/database'
+import type { Task, Client, Profile, TaskTemplate } from '@/types/database'
 
 type TaskWithRelations = Task & {
   clients: { name: string } | null
@@ -15,9 +15,9 @@ type ColConfig = {
   color: string
   displayStatuses: string[]
   dropStatus: string
-  lockCards?: boolean   // cards shown here não podem ser arrastados
-  noAdd?: boolean       // sem botão "+"
-  isDropZone?: boolean  // coluna de transição (sem cards permanentes)
+  lockCards?: boolean
+  noAdd?: boolean
+  isDropZone?: boolean
 }
 
 // Quadro Social Media
@@ -115,6 +115,23 @@ const PRIORITY = {
   low:    { label: 'Baixa',   color: 'var(--text-muted)' },
 }
 
+// Parses description for interactive checklist items
+function parseChecklist(text: string) {
+  const lines = text.split('\n')
+  const items = lines.map(line => {
+    const m = line.match(/^- \[([ x])\] (.+)/)
+    if (m) return { type: 'check' as const, checked: m[1] === 'x', text: m[2] }
+    return { type: 'text' as const, text: line, checked: false }
+  })
+  return {
+    items,
+    hasChecklist: items.some(i => i.type === 'check'),
+    total: items.filter(i => i.type === 'check').length,
+    done: items.filter(i => i.type === 'check' && i.checked).length,
+  }
+}
+
+
 export default function KanbanBoard({
   initialTasks,
   clients,
@@ -122,7 +139,7 @@ export default function KanbanBoard({
   userRole = 'gestor',
 }: {
   initialTasks: TaskWithRelations[]
-  clients: Pick<Client, 'id' | 'name'>[]
+  clients: Pick<Client, 'id' | 'name' | 'status'>[]
   profiles: Pick<Profile, 'id' | 'name' | 'avatar_color'>[]
   userRole?: string
 }) {
@@ -144,6 +161,7 @@ export default function KanbanBoard({
   const [clientId, setClientId] = useState('')
   const [assigneeId, setAssigneeId] = useState('')
   const [priority, setPriority] = useState('medium')
+  const [startDate, setStartDate] = useState('')
   const [dueDate, setDueDate] = useState('')
   const [dueTime, setDueTime] = useState('')
   const [status, setStatus] = useState(defaultStatus)
@@ -151,6 +169,18 @@ export default function KanbanBoard({
 
   const [filterFrom, setFilterFrom] = useState('')
   const [filterTo, setFilterTo] = useState('')
+
+  // Templates
+  const [showTemplates, setShowTemplates] = useState(false)
+  const [templates, setTemplates] = useState<TaskTemplate[]>([])
+  const [loadingTemplates, setLoadingTemplates] = useState(false)
+  const [newTemplateName, setNewTemplateName] = useState('')
+  const [savingTemplate, setSavingTemplate] = useState(false)
+
+  const today = new Date().toISOString().split('T')[0]
+
+  // Active clients for template checklist
+  const activeClients = clients.filter(c => c.status === 'ativo' || c.status === 'active')
 
   function getTaskColumn(task: TaskWithRelations): ColConfig | undefined {
     return columns.find(c => c.displayStatuses.includes(task.status))
@@ -164,7 +194,7 @@ export default function KanbanBoard({
     const col = columns.find(c => c.id === colId)
     setEditTask(null)
     setTitle(''); setDescription(''); setClientId(''); setAssigneeId('')
-    setPriority('medium'); setDueDate(''); setDueTime('')
+    setPriority('medium'); setStartDate(''); setDueDate(''); setDueTime('')
     setStatus(col?.dropStatus ?? defaultStatus)
     setShowForm(true)
   }
@@ -176,6 +206,7 @@ export default function KanbanBoard({
     setClientId(task.client_id || '')
     setAssigneeId(task.assignee_id || '')
     setPriority(task.priority)
+    setStartDate((task as any).start_date || '')
     setDueDate(task.due_date || '')
     setDueTime((task as any).due_time || '')
     setStatus(task.status)
@@ -190,7 +221,11 @@ export default function KanbanBoard({
     const payload = {
       title, description: description || null,
       client_id: clientId || null, assignee_id: assigneeId || null,
-      priority, due_date: dueDate || null, due_time: dueTime || null, status,
+      priority,
+      start_date: startDate || null,
+      due_date: dueDate || null,
+      due_time: dueTime || null,
+      status,
     }
 
     if (editTask) {
@@ -223,15 +258,69 @@ export default function KanbanBoard({
     await supabase.from('tasks').update({ status: newStatus }).eq('id', taskId)
   }
 
+  // --- Templates ---
+  async function loadTemplates() {
+    setLoadingTemplates(true)
+    const supabase = createClient()
+    const { data } = await supabase.from('task_templates').select('*').order('created_at', { ascending: false })
+    setTemplates((data as TaskTemplate[]) ?? [])
+    setLoadingTemplates(false)
+  }
+
+  async function openTemplates() {
+    setShowTemplates(true)
+    await loadTemplates()
+  }
+
+  async function saveCurrentAsTemplate() {
+    if (!newTemplateName.trim()) return
+    setSavingTemplate(true)
+    const supabase = createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    await supabase.from('task_templates').insert({
+      title: newTemplateName.trim(),
+      description: description || null,
+      priority,
+      assignee_id: assigneeId || null,
+      created_by: user?.id,
+    })
+    setNewTemplateName('')
+    setSavingTemplate(false)
+    await loadTemplates()
+  }
+
+  async function deleteTemplate(id: string) {
+    if (!confirm('Eliminar este modelo?')) return
+    const supabase = createClient()
+    await supabase.from('task_templates').delete().eq('id', id)
+    setTemplates(prev => prev.filter(t => t.id !== id))
+  }
+
+  function applyTemplate(template: TaskTemplate) {
+    const checklist = activeClients.length > 0
+      ? '\n' + activeClients.map(c => `- [ ] ${c.name}`).join('\n')
+      : ''
+    setEditTask(null)
+    setTitle(template.title)
+    setDescription((template.description || '') + checklist)
+    setClientId('')
+    setAssigneeId(template.assignee_id || '')
+    setPriority(template.priority)
+    setStartDate('')
+    setDueDate('')
+    setDueTime('')
+    setStatus(defaultStatus)
+    setShowTemplates(false)
+    setShowForm(true)
+  }
+
   const inputClass = "w-full px-3 py-2 rounded-lg text-sm text-white outline-none"
   const inputStyle = { background: 'var(--surface-2)', border: '1px solid var(--border)' }
 
-  // Status options no modal (excluí lockCards e isDropZone)
   const statusOptions = columns
     .filter(c => !c.lockCards && !c.isDropZone && c.displayStatuses.length > 0)
     .flatMap(c => c.displayStatuses.map(s => ({ value: s, label: c.label })))
 
-  // Stats do header
   const headerStats =
     userRole === 'social_media'
       ? `${tasks.filter(t => ['sm_novo', 'sm_revisao'].includes(t.status)).length} para atender · ${tasks.filter(t => t.status === 'sm_aprovacao').length} aprovadas`
@@ -252,11 +341,18 @@ export default function KanbanBoard({
           <h1 className="text-xl font-bold text-white">{boardTitle}</h1>
           <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>{headerStats}</p>
         </div>
-        <button onClick={() => openNew(columns[0].id)}
-          className="px-4 py-2 rounded-lg text-sm font-semibold text-white"
-          style={{ background: 'var(--accent)' }}>
-          + Nova tarefa
-        </button>
+        <div className="flex items-center gap-2">
+          <button onClick={openTemplates}
+            className="px-3 py-2 rounded-lg text-sm font-semibold"
+            style={{ background: 'var(--surface-2)', color: 'var(--text-muted)', border: '1px solid var(--border)' }}>
+            Modelos
+          </button>
+          <button onClick={() => openNew(columns[0].id)}
+            className="px-4 py-2 rounded-lg text-sm font-semibold text-white"
+            style={{ background: 'var(--accent)' }}>
+            + Nova tarefa
+          </button>
+        </div>
       </div>
 
       {/* Filtro de data */}
@@ -284,13 +380,21 @@ export default function KanbanBoard({
           {columns.map(col => {
             const colTasks = tasks.filter(t => {
               if (!col.displayStatuses.includes(t.status)) return false
+
+              const isDone = t.status === 'done' || t.status === 'sm_aprovacao'
+
+              // Auto-archive: tarefas concluídas após a data final somem do quadro
+              if (isDone && t.due_date && t.due_date < today) return false
+
+              // Não mostrar tarefas antes da data inicial
+              if ((t as any).start_date && (t as any).start_date > today) return false
+
               if (!filterFrom && !filterTo) return true
               const d = t.due_date || ''
               return (!filterFrom || d >= filterFrom) && (!filterTo || d <= filterTo)
             })
             const isOver = dragOver === col.id
 
-            // Coluna de transição (drop zone apenas)
             if (col.isDropZone) {
               return (
                 <div key={col.id}
@@ -326,7 +430,6 @@ export default function KanbanBoard({
                 onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragOver(null) }}
                 onDrop={e => { e.preventDefault(); if (dragging) moveTask(dragging, col.id); setDragging(null); setDragOver(null) }}>
 
-                {/* Cabeçalho da coluna */}
                 <div className="px-4 py-3 border-b flex items-center justify-between" style={{ borderColor: 'var(--border)' }}>
                   <div className="flex items-center gap-2">
                     <div className="w-2 h-2 rounded-full" style={{ background: col.color }} />
@@ -348,8 +451,10 @@ export default function KanbanBoard({
                   {colTasks.map(task => {
                     const p = PRIORITY[task.priority as keyof typeof PRIORITY]
                     const isDone = task.status === 'done' || task.status === 'sm_aprovacao'
-                    const isOverdue = task.due_date && new Date(task.due_date) < new Date() && !isDone
+                    const isOverdue = task.due_date && task.due_date < today && !isDone
                     const draggable = isTaskDraggable(task)
+                    const checklist = parseChecklist(task.description || '')
+
                     return (
                       <div key={task.id}
                         draggable={draggable}
@@ -368,12 +473,6 @@ export default function KanbanBoard({
                             className="text-xs shrink-0 mt-0.5" style={{ color: 'var(--text-muted)' }}>✎</button>
                         </div>
 
-                        {task.description && (
-                          <p className="text-xs mb-2 line-clamp-2" style={{ color: 'var(--text-muted)' }}>
-                            {task.description}
-                          </p>
-                        )}
-
                         {/* Nota de ajuste do cliente */}
                         {(task as any).approval_notes && (
                           <div className="rounded-lg px-2.5 py-2 mb-2"
@@ -384,6 +483,21 @@ export default function KanbanBoard({
                             <p className="text-xs leading-snug" style={{ color: '#fed7aa' }}>
                               {(task as any).approval_notes}
                             </p>
+                          </div>
+                        )}
+
+                        {/* Progresso do checklist (compacto, sem expor os itens) */}
+                        {task.description && checklist.hasChecklist && (
+                          <div className="flex items-center gap-2 mb-2">
+                            <div className="flex-1 h-1 rounded-full overflow-hidden" style={{ background: 'var(--border)' }}>
+                              <div className="h-full rounded-full transition-all" style={{
+                                background: 'var(--accent)',
+                                width: checklist.total > 0 ? `${(checklist.done / checklist.total) * 100}%` : '0%',
+                              }} />
+                            </div>
+                            <span className="text-xs shrink-0" style={{ color: 'var(--text-muted)' }}>
+                              {checklist.done}/{checklist.total}
+                            </span>
                           </div>
                         )}
 
@@ -404,19 +518,27 @@ export default function KanbanBoard({
                               {task.status === 'design_fazendo' ? '🎨 Fazendo' : '🎨 Em fila'}
                             </span>
                           )}
-                          {task.due_date && (
-                            <span className="text-xs ml-auto"
-                              style={{ color: isOverdue ? 'var(--danger)' : 'var(--text-muted)' }}>
-                              {isOverdue ? '⚠ ' : ''}{new Date(task.due_date + 'T12:00:00').toLocaleDateString('pt-BR', { day: 'numeric', month: 'short' })}
-                              {(task as any).due_time && ` ${(task as any).due_time}`}
-                            </span>
-                          )}
+                          {/* Datas */}
+                          <div className="ml-auto flex items-center gap-1">
+                            {(task as any).start_date && (
+                              <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                                {new Date((task as any).start_date + 'T12:00:00').toLocaleDateString('pt-BR', { day: 'numeric', month: 'short' })}
+                                {' →'}
+                              </span>
+                            )}
+                            {task.due_date && (
+                              <span className="text-xs"
+                                style={{ color: isOverdue ? 'var(--danger)' : 'var(--text-muted)' }}>
+                                {isOverdue ? '⚠ ' : ''}{new Date(task.due_date + 'T12:00:00').toLocaleDateString('pt-BR', { day: 'numeric', month: 'short' })}
+                                {(task as any).due_time && ` ${(task as any).due_time}`}
+                              </span>
+                            )}
+                          </div>
                         </div>
                       </div>
                     )
                   })}
 
-                  {/* Dica visual quando coluna está vazia e é drop target */}
                   {colTasks.length === 0 && isOver && (
                     <div className="rounded-lg p-4 text-center text-xs border-2 border-dashed"
                       style={{ borderColor: col.color, color: col.color }}>
@@ -433,7 +555,8 @@ export default function KanbanBoard({
       {/* Modal de tarefa */}
       {showForm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.7)' }}>
-          <div className="w-full max-w-md rounded-xl p-6 space-y-4" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+          <div className="w-full max-w-md rounded-xl p-6 space-y-4 max-h-[90vh] overflow-y-auto"
+            style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
             <div className="flex items-center justify-between">
               <h2 className="font-semibold text-white">{editTask ? 'Editar tarefa' : 'Nova tarefa'}</h2>
               <button onClick={() => setShowForm(false)} style={{ color: 'var(--text-muted)' }}>✕</button>
@@ -443,7 +566,7 @@ export default function KanbanBoard({
               className={inputClass} style={inputStyle} />
 
             <textarea placeholder="Descrição (opcional)" value={description} onChange={e => setDescription(e.target.value)}
-              rows={2} className={inputClass} style={inputStyle} />
+              rows={5} className={`${inputClass} resize-y`} style={{ ...inputStyle, minHeight: '120px' }} />
 
             <div className="grid grid-cols-2 gap-3">
               <select value={status} onChange={e => setStatus(e.target.value)} className={inputClass} style={inputStyle}>
@@ -467,13 +590,45 @@ export default function KanbanBoard({
               </select>
             </div>
 
-            <div className="flex gap-2">
-              <input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)}
-                className={inputClass} style={inputStyle} />
+            {/* Datas */}
+            <div>
+              <p className="text-xs mb-2" style={{ color: 'var(--text-muted)' }}>Período da tarefa</p>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>Data inicial</label>
+                  <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)}
+                    className={inputClass} style={inputStyle} />
+                </div>
+                <div>
+                  <label className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>Data final</label>
+                  <input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)}
+                    className={inputClass} style={inputStyle} />
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>Hora (opcional)</label>
               <input type="time" value={dueTime} onChange={e => setDueTime(e.target.value)}
                 placeholder="Hora"
-                className="w-28 px-3 py-2 rounded-lg text-sm text-white outline-none"
+                className="w-36 px-3 py-2 rounded-lg text-sm text-white outline-none"
                 style={inputStyle} />
+            </div>
+
+            {/* Salvar como modelo */}
+            <div className="rounded-lg p-3 space-y-2" style={{ background: 'var(--surface-2)', border: '1px solid var(--border)' }}>
+              <p className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>Salvar como modelo de tarefa</p>
+              <div className="flex gap-2">
+                <input type="text" placeholder="Nome do modelo" value={newTemplateName}
+                  onChange={e => setNewTemplateName(e.target.value)}
+                  className="flex-1 px-3 py-1.5 rounded-lg text-xs text-white outline-none"
+                  style={{ background: 'var(--surface)', border: '1px solid var(--border)' }} />
+                <button onClick={saveCurrentAsTemplate} disabled={!newTemplateName.trim() || savingTemplate}
+                  className="px-3 py-1.5 rounded-lg text-xs font-semibold disabled:opacity-50"
+                  style={{ background: 'var(--accent)', color: '#fff' }}>
+                  {savingTemplate ? '...' : 'Salvar'}
+                </button>
+              </div>
             </div>
 
             <div className="flex gap-2">
@@ -488,6 +643,67 @@ export default function KanbanBoard({
                   style={{ background: 'var(--surface-2)', color: 'var(--danger)', border: '1px solid var(--border)' }}>
                   Eliminar
                 </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de modelos */}
+      {showTemplates && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.7)' }}>
+          <div className="w-full max-w-md rounded-xl p-6 space-y-4 max-h-[80vh] flex flex-col"
+            style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+            <div className="flex items-center justify-between shrink-0">
+              <div>
+                <h2 className="font-semibold text-white">Modelos de tarefa</h2>
+                <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
+                  Cria uma tarefa com checklist de todos os clientes ativos
+                </p>
+              </div>
+              <button onClick={() => setShowTemplates(false)} style={{ color: 'var(--text-muted)' }}>✕</button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto space-y-2">
+              {loadingTemplates ? (
+                <p className="text-xs text-center py-8" style={{ color: 'var(--text-muted)' }}>A carregar...</p>
+              ) : templates.length === 0 ? (
+                <div className="text-center py-8">
+                  <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Nenhum modelo ainda</p>
+                  <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
+                    Cria uma tarefa e usa "Salvar como modelo"
+                  </p>
+                </div>
+              ) : (
+                templates.map(template => (
+                  <div key={template.id} className="rounded-lg p-3 flex items-center gap-3"
+                    style={{ background: 'var(--surface-2)', border: '1px solid var(--border)' }}>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-white truncate">{template.title}</p>
+                      {template.description && (
+                        <p className="text-xs mt-0.5 line-clamp-1" style={{ color: 'var(--text-muted)' }}>
+                          {template.description}
+                        </p>
+                      )}
+                      <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
+                        Prioridade: {PRIORITY[template.priority as keyof typeof PRIORITY]?.label ?? template.priority}
+                        {activeClients.length > 0 && ` · ${activeClients.length} clientes ativos`}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button onClick={() => applyTemplate(template)}
+                        className="px-3 py-1.5 rounded-lg text-xs font-semibold text-white"
+                        style={{ background: 'var(--accent)' }}>
+                        Usar
+                      </button>
+                      <button onClick={() => deleteTemplate(template.id)}
+                        className="px-2 py-1.5 rounded-lg text-xs"
+                        style={{ color: 'var(--danger)', background: 'var(--surface)' }}>
+                        ✕
+                      </button>
+                    </div>
+                  </div>
+                ))
               )}
             </div>
           </div>

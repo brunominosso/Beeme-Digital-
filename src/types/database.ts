@@ -116,6 +116,7 @@ export interface Database {
           created_by: string | null
           status: string
           priority: string
+          start_date: string | null
           due_date: string | null
           recurrence: string | null
           approval_notes: string | null
@@ -132,6 +133,7 @@ export interface Database {
           created_by?: string | null
           status?: string
           priority?: string
+          start_date?: string | null
           due_date?: string | null
           recurrence?: string | null
           approval_notes?: string | null
@@ -146,11 +148,39 @@ export interface Database {
           assignee_id?: string | null
           status?: string
           priority?: string
+          start_date?: string | null
           due_date?: string | null
           recurrence?: string | null
           approval_notes?: string | null
           position?: number
           updated_at?: string
+        }
+        Relationships: []
+      }
+      task_templates: {
+        Row: {
+          id: string
+          title: string
+          description: string | null
+          priority: string
+          assignee_id: string | null
+          created_by: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          title: string
+          description?: string | null
+          priority?: string
+          assignee_id?: string | null
+          created_by?: string | null
+          created_at?: string
+        }
+        Update: {
+          title?: string
+          description?: string | null
+          priority?: string
+          assignee_id?: string | null
         }
         Relationships: []
       }
@@ -525,3 +555,4 @@ export type KeyResult = Database['public']['Tables']['key_results']['Row']
 export type Service = Database['public']['Tables']['services']['Row']
 export type Post = Database['public']['Tables']['posts']['Row']
 export type PaymentSchedule = Database['public']['Tables']['payment_schedules']['Row']
+export type TaskTemplate = Database['public']['Tables']['task_templates']['Row']

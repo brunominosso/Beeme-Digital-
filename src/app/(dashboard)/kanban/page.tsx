@@ -37,14 +37,14 @@ export default async function KanbanPage() {
 
   const [{ data: rawTasks }, { data: rawClients }, { data: rawProfiles }] = await Promise.all([
     taskQuery,
-    supabase.from('clients').select('id, name').order('name'),
+    supabase.from('clients').select('id, name, status').order('name'),
     supabase.from('profiles').select('id, name, avatar_color'),
   ])
 
   return (
     <KanbanBoard
       initialTasks={(rawTasks as TaskWithRelations[]) ?? []}
-      clients={(rawClients as Pick<Client, 'id' | 'name'>[]) ?? []}
+      clients={(rawClients as Pick<Client, 'id' | 'name' | 'status'>[]) ?? []}
       profiles={(rawProfiles as Pick<Profile, 'id' | 'name' | 'avatar_color'>[]) ?? []}
       userRole={userRole}
     />

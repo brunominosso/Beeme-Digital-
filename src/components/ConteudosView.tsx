@@ -80,15 +80,17 @@ function PostModal({ post, clients, profiles, onClose, onSave, userRole }: {
     const picked = Array.from(e.target.files ?? [])
     if (!picked.length) return
     setUploading(true)
-    const supabase = createClient()
-    const postId = post.id ?? `tmp-${Date.now()}`
     const newFiles: PostFile[] = []
     for (const file of picked) {
-      const path = `${postId}/${Date.now()}-${file.name.replace(/\s+/g, '_')}`
-      const { error } = await supabase.storage.from('post-files').upload(path, file, { upsert: true })
-      if (!error) {
-        const { data: urlData } = supabase.storage.from('post-files').getPublicUrl(path)
-        newFiles.push({ name: file.name, url: urlData.publicUrl, type: file.type, size: file.size })
+      const form = new FormData()
+      form.append('file', file)
+      const res = await fetch('/api/upload', { method: 'POST', body: form })
+      if (res.ok) {
+        const data = await res.json()
+        newFiles.push({ name: data.name, url: data.url, type: data.type, size: data.size })
+      } else {
+        const err = await res.json()
+        alert(err.error ?? `Erro ao enviar ${file.name}`)
       }
     }
     setFiles(prev => [...prev, ...newFiles])
