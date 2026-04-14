@@ -3,6 +3,7 @@ import HomeDashboard from '@/components/HomeDashboard'
 import HomeDesigner from '@/components/HomeDesigner'
 import HomeSocialMedia from '@/components/HomeSocialMedia'
 import HomeFinanceiro from '@/components/HomeFinanceiro'
+import HomeMobile from '@/components/HomeMobile'
 import type { Client, Task, Meeting, Profile, Invoice, Expense, Post, PaymentSchedule } from '@/types/database'
 
 export default async function DashboardPage() {
@@ -83,14 +84,29 @@ export default async function DashboardPage() {
     weekEndStr,
   }
 
+  const mobileView = (
+    <div className="md:hidden">
+      <HomeMobile
+        profile={activeProfile}
+        myClients={myClients}
+        allTasks={myTasks}
+        upcomingMeetings={upcomingMeetings}
+        todayStr={todayStr}
+        tomorrowStr={tomorrowStr}
+        allProfiles={allProfiles}
+        allPosts={allPosts}
+      />
+    </div>
+  )
+
   switch (activeProfile.role) {
     case 'designer':
-      return <HomeDesigner {...sharedProps} myPosts={myPosts} allClients={allClients} />
+      return <>{mobileView}<div className="hidden md:block"><HomeDesigner {...sharedProps} myPosts={myPosts} allClients={allClients} /></div></>
     case 'social_media':
-      return <HomeSocialMedia {...sharedProps} myPosts={myPosts} allClients={allClients} weekEndStr={weekEndStr} />
+      return <>{mobileView}<div className="hidden md:block"><HomeSocialMedia {...sharedProps} myPosts={myPosts} allClients={allClients} weekEndStr={weekEndStr} /></div></>
     case 'financeiro':
-      return <HomeFinanceiro {...sharedProps} allInvoices={allInvoices} allExpenses={allExpenses} paymentSchedules={allSchedules} />
+      return <>{mobileView}<div className="hidden md:block"><HomeFinanceiro {...sharedProps} allInvoices={allInvoices} allExpenses={allExpenses} paymentSchedules={allSchedules} /></div></>
     default:
-      return <HomeDashboard {...sharedProps} allProfiles={allProfiles} allClients={allClients} allPosts={allPosts} allTasks={allTasks} />
+      return <>{mobileView}<div className="hidden md:block"><HomeDashboard {...sharedProps} allProfiles={allProfiles} allClients={allClients} allPosts={allPosts} allTasks={allTasks} /></div></>
   }
 }
