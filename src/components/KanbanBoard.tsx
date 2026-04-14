@@ -461,7 +461,7 @@ export default function KanbanBoard({
       </div>
 
       {/* Board */}
-      <div className="flex-1 overflow-x-auto p-6">
+      <div className="flex-1 overflow-x-auto p-3 md:p-6">
         <div className="flex gap-4 h-full min-w-max">
           {columns.map(col => {
             const colTasks = tasks.filter(t => {

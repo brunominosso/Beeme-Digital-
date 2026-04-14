@@ -26,6 +26,12 @@ const playfair = Playfair_Display({
 export const metadata: Metadata = {
   title: "Beeme Digital — Gestão",
   description: "Sistema de gestão interna Beeme Digital",
+  manifest: "/manifest.json",
+  appleWebApp: {
+    capable: true,
+    title: "Beeme Digital",
+    statusBarStyle: "black-translucent",
+  },
 };
 
 export default function RootLayout({
@@ -35,6 +41,16 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="pt-BR" className={`h-full ${barlowCondensed.variable} ${dmSans.variable} ${playfair.variable}`}>
+      <head>
+        <meta name="theme-color" content="#9FA4DB" />
+        <meta name="mobile-web-app-capable" content="yes" />
+        <link rel="apple-touch-icon" href="/icons/apple-touch-icon.svg" />
+        <script dangerouslySetInnerHTML={{ __html: `
+          if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js'));
+          }
+        `}} />
+      </head>
       <body className="min-h-full flex flex-col antialiased">{children}</body>
     </html>
   );

@@ -60,9 +60,9 @@ export default function LeadsView({
   const inputStyle = { background: 'var(--surface-2)', border: '1px solid var(--border)' }
 
   return (
-    <div className="flex flex-col min-h-screen p-6 max-w-7xl mx-auto">
+    <div className="flex flex-col min-h-screen p-4 md:p-6 max-w-7xl mx-auto">
       {/* Header */}
-      <div className="flex items-center justify-between mb-8">
+      <div className="flex items-center justify-between mb-5 md:mb-8">
         <div>
           <h1 className="text-2xl font-bold text-white">Leads & Clientes</h1>
           <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>
@@ -81,13 +81,13 @@ export default function LeadsView({
       {/* Pipeline */}
       <div className="mb-10">
         <h2 className="text-sm font-semibold mb-4" style={{ color: 'var(--text-muted)' }}>PIPELINE</h2>
-        <div className="grid grid-cols-4 gap-4">
+        <div className="flex gap-3 overflow-x-auto pb-2 md:grid md:grid-cols-4 md:gap-4">
           {PIPELINE_COLS.map(col => {
             const colClients = pipelineClients.filter(c => c.status === col.id)
             const isOver = dragOver === col.id
             return (
               <div key={col.id}
-                className="rounded-xl min-h-48 flex flex-col"
+                className="rounded-xl min-h-48 flex flex-col shrink-0 w-64 md:w-auto"
                 style={{
                   background: 'var(--surface)',
                   border: `1px solid ${isOver ? col.color : 'var(--border)'}`,
@@ -183,7 +183,7 @@ export default function LeadsView({
             <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>Arrasta um card de Onboarding para aqui</p>
           </div>
         ) : (
-          <div className="grid grid-cols-5 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
             {activeClients.map(c => {
               const responsibles = profiles.filter(p => c.responsible_ids?.includes(p.id))
               return (

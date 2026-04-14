@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import type { Invoice, Expense, Client, PaymentSchedule } from '@/types/database'
 
@@ -32,6 +33,7 @@ export default function FinancialView({
   clients: ClientOption[]
   initialSchedules: ScheduleWithClient[]
 }) {
+  const router = useRouter()
   const [tab, setTab] = useState<'invoices' | 'expenses' | 'schedules'>('invoices')
   const [invoices, setInvoices] = useState(initialInvoices)
   const [expenses, setExpenses] = useState(initialExpenses)
@@ -110,9 +112,9 @@ export default function FinancialView({
       payment_day: parseInt(sDay),
       created_by: user?.id,
     }).select('*, clients(name, status)').single()
-    if (data) setSchedules(prev => [...prev, data as ScheduleWithClient].sort((a, b) => a.payment_day - b.payment_day))
     setSaving(false); setShowForm(false)
     setSClientId(''); setSDescription('Mensalidade'); setSAmount(''); setSDay('')
+    router.refresh()
   }
 
   async function toggleSchedule(id: string, active: boolean) {

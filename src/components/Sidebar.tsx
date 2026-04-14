@@ -8,7 +8,6 @@ import type { User } from '@supabase/supabase-js'
 type NavItem = { href: string; label: string; icon: string; exact: boolean; adminOnly?: boolean; roles?: string[] }
 type NavGroup = { section: string | null; items: NavItem[] }
 
-// roles: quais roles veem este item. Se omitido = todos.
 const NAV: NavGroup[] = [
   { section: null, items: [
     { href: '/', label: 'Dashboard', icon: '⚡', exact: true },
@@ -30,7 +29,14 @@ const NAV: NavGroup[] = [
   ]},
 ]
 
-export default function Sidebar({ user, role }: { user: User; role: string }) {
+interface Props {
+  user: User
+  role: string
+  isOpen?: boolean
+  onClose?: () => void
+}
+
+export default function Sidebar({ user, role, isOpen = false, onClose }: Props) {
   const pathname = usePathname()
   const router = useRouter()
 
@@ -45,10 +51,22 @@ export default function Sidebar({ user, role }: { user: User; role: string }) {
     return pathname.startsWith(href)
   }
 
+  function handleNavClick() {
+    onClose?.()
+  }
+
   return (
-    <aside className="w-56 flex flex-col border-r shrink-0" style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}>
+    <aside
+      className={[
+        // Mobile: fixed drawer deslizante
+        'fixed inset-y-0 left-0 z-50 w-64 flex flex-col border-r transition-transform duration-300',
+        'md:static md:translate-x-0 md:w-56 md:z-auto md:transition-none md:shrink-0',
+        isOpen ? 'translate-x-0' : '-translate-x-full',
+      ].join(' ')}
+      style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}
+    >
       {/* Logo */}
-      <div className="px-4 py-5 border-b" style={{ borderColor: 'var(--border)' }}>
+      <div className="px-4 py-5 border-b flex items-center justify-between" style={{ borderColor: 'var(--border)' }}>
         <div className="flex items-center gap-2.5">
           <div className="w-8 h-8 rounded-lg flex items-center justify-center text-base font-bold shrink-0"
             style={{ background: 'var(--lavanda)', color: '#08080F' }}>
@@ -61,6 +79,15 @@ export default function Sidebar({ user, role }: { user: User; role: string }) {
             <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>Gestão</p>
           </div>
         </div>
+        {/* Botão fechar — só aparece no mobile */}
+        <button
+          onClick={onClose}
+          className="md:hidden w-8 h-8 flex items-center justify-center rounded-lg transition-colors"
+          style={{ color: 'var(--text-muted)' }}
+          aria-label="Fechar menu"
+        >
+          ✕
+        </button>
       </div>
 
       {/* Nav */}
@@ -73,29 +100,30 @@ export default function Sidebar({ user, role }: { user: User; role: string }) {
           })
           if (visibleItems.length === 0) return null
           return (
-          <div key={i}>
-            {group.section && (
-              <p className="label-caps px-3 mb-1">{group.section}</p>
-            )}
-            <div className="space-y-0.5">
-              {visibleItems.map(item => {
-                const active = isActive(item.href, item.exact)
-                return (
-                  <Link key={item.href} href={item.href}
-                    className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-all"
-                    style={{
-                      background: active ? '#9FA4DB14' : 'transparent',
-                      color: active ? 'var(--lavanda-light)' : 'var(--text-muted)',
-                      borderLeft: active ? '2px solid var(--lavanda)' : '2px solid transparent',
-                      marginLeft: '-2px',
-                    }}>
-                    <span className="text-base leading-none">{item.icon}</span>
-                    {item.label}
-                  </Link>
-                )
-              })}
+            <div key={i}>
+              {group.section && (
+                <p className="label-caps px-3 mb-1">{group.section}</p>
+              )}
+              <div className="space-y-0.5">
+                {visibleItems.map(item => {
+                  const active = isActive(item.href, item.exact)
+                  return (
+                    <Link key={item.href} href={item.href}
+                      onClick={handleNavClick}
+                      className="flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm transition-all"
+                      style={{
+                        background: active ? '#9FA4DB14' : 'transparent',
+                        color: active ? 'var(--lavanda-light)' : 'var(--text-muted)',
+                        borderLeft: active ? '2px solid var(--lavanda)' : '2px solid transparent',
+                        marginLeft: '-2px',
+                      }}>
+                      <span className="text-base leading-none">{item.icon}</span>
+                      {item.label}
+                    </Link>
+                  )
+                })}
+              </div>
             </div>
-          </div>
           )
         })}
       </nav>

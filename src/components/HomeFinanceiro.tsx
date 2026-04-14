@@ -98,34 +98,34 @@ export default function HomeFinanceiro({ profile, myClients, allTasks, todayStr,
   const mrr = clientesComValor.reduce((s, c) => s + (c.monthly_value ?? 0), 0)
 
   return (
-    <div className="p-6 max-w-6xl mx-auto space-y-6">
+    <div className="p-4 md:p-6 max-w-6xl mx-auto space-y-4 md:space-y-6">
 
       {/* Header */}
-      <div className="rounded-2xl p-6 flex items-start justify-between gap-5" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
-        <div className="flex items-start gap-4">
+      <div className="rounded-2xl p-4 md:p-6 flex flex-col md:flex-row md:items-start md:justify-between gap-4 md:gap-5" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+        <div className="flex items-center gap-4">
           <div className="w-14 h-14 rounded-2xl flex items-center justify-center text-xl font-bold shrink-0"
             style={{ background: profile.avatar_color || roleColor, color: '#08080F' }}>
             {getInitials(profile.name || '?')}
           </div>
           <div>
-            <div className="flex items-center gap-3">
-              <h1 className="text-2xl font-bold" style={{ color: 'var(--cream)' }}>{greeting}, {profile.name?.split(' ')[0]}</h1>
-              <span className="text-xs px-2.5 py-1 rounded-full font-semibold" style={{ background: roleColor + '20', color: roleColor, border: `1px solid ${roleColor}40` }}>Financeiro</span>
+            <div className="flex items-center gap-2 flex-wrap">
+              <h1 className="text-xl md:text-2xl font-bold" style={{ color: 'var(--cream)' }}>{greeting}, {profile.name?.split(' ')[0]}</h1>
+              <span className="text-xs px-2 py-0.5 rounded-full font-semibold" style={{ background: roleColor + '20', color: roleColor, border: `1px solid ${roleColor}40` }}>Financeiro</span>
             </div>
-            <p className="text-sm mt-0.5" style={{ color: 'var(--text-muted)' }}>
+            <p className="text-xs md:text-sm mt-0.5" style={{ color: 'var(--text-muted)' }}>
               {now.toLocaleDateString('pt-PT', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
             </p>
           </div>
         </div>
         <button onClick={() => setShowTaskModal(true)}
-          className="px-4 py-2 rounded-lg text-sm font-semibold shrink-0"
+          className="px-4 py-2 rounded-lg text-sm font-semibold shrink-0 self-start"
           style={{ background: roleColor, color: '#08080F' }}>
           + Nova tarefa
         </button>
       </div>
 
       {/* KPIs financeiros */}
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
         {[
           { label: 'Recebido este mês', value: fmt(receitaMes), icon: '💰', color: roleColor, sub: `${invoicesPagas.length} faturas pagas` },
           { label: 'A receber', value: fmt(aReceber), icon: '📄', color: invoicesVencidas.length > 0 ? 'var(--danger)' : '#f59e0b', sub: `${invoicesVencidas.length > 0 ? `${invoicesVencidas.length} vencidas` : `${invoicesPendentes.length} pendentes`}` },
@@ -203,7 +203,7 @@ export default function HomeFinanceiro({ profile, myClients, allTasks, todayStr,
         </div>
       )}
 
-      <div className="grid grid-cols-3 gap-5">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-5">
 
         {/* Faturas pendentes */}
         <div className="col-span-2 rounded-xl overflow-hidden" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
@@ -297,7 +297,7 @@ export default function HomeFinanceiro({ profile, myClients, allTasks, todayStr,
       {/* Acesso rápido */}
       <div>
         <h2 className="label-caps mb-3">Acesso rápido</h2>
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           {[
             { href: '/financial', label: 'Financeiro', icon: '💸', desc: 'Faturas e despesas' },
             { href: '/leads', label: 'Clientes', icon: '👥', desc: 'Gerir contratos' },

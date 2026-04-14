@@ -118,6 +118,7 @@ export interface Database {
           priority: string
           start_date: string | null
           due_date: string | null
+          due_time: string | null
           recurrence: string | null
           approval_notes: string | null
           position: number
@@ -135,6 +136,7 @@ export interface Database {
           priority?: string
           start_date?: string | null
           due_date?: string | null
+          due_time?: string | null
           recurrence?: string | null
           approval_notes?: string | null
           position?: number
@@ -150,6 +152,7 @@ export interface Database {
           priority?: string
           start_date?: string | null
           due_date?: string | null
+          due_time?: string | null
           recurrence?: string | null
           approval_notes?: string | null
           position?: number
@@ -166,6 +169,8 @@ export interface Database {
           assignee_id: string | null
           created_by: string | null
           created_at: string
+          cadencia_ativa: boolean
+          cadencia_dia: number | null
         }
         Insert: {
           id?: string
@@ -175,12 +180,16 @@ export interface Database {
           assignee_id?: string | null
           created_by?: string | null
           created_at?: string
+          cadencia_ativa?: boolean
+          cadencia_dia?: number | null
         }
         Update: {
           title?: string
           description?: string | null
           priority?: string
           assignee_id?: string | null
+          cadencia_ativa?: boolean
+          cadencia_dia?: number | null
         }
         Relationships: []
       }

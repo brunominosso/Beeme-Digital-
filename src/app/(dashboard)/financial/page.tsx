@@ -25,7 +25,7 @@ export default async function FinancialPage() {
     <FinancialView
       initialInvoices={(rawInvoices as InvoiceWithClient[]) ?? []}
       initialExpenses={(rawExpenses as Expense[]) ?? []}
-      clients={(rawClients as Pick<Client, 'id' | 'name' | 'monthly_value' | 'payment_day' | 'status'>[]) ?? []}
+      clients={((rawClients as Pick<Client, 'id' | 'name' | 'monthly_value' | 'payment_day' | 'status'>[]) ?? []).filter(c => c.status === 'ativo')}
       initialSchedules={(rawSchedules as ScheduleWithClient[]) ?? []}
     />
   )

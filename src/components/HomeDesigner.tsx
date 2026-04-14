@@ -102,40 +102,42 @@ export default function HomeDesigner({ profile, myClients, allTasks, todayStr, m
   const totalAcao = postsParaCriar.length + postsParaEditar.length
 
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-6">
+    <div className="p-4 md:p-6 max-w-7xl mx-auto space-y-4 md:space-y-6">
 
       {/* Hero */}
-      <div className="rounded-2xl p-6 flex items-start gap-5" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
-        <div className="w-14 h-14 rounded-2xl flex items-center justify-center text-xl font-bold shrink-0"
-          style={{ background: profile.avatar_color || roleColor, color: '#08080F' }}>
-          {getInitials(profile.name || '?')}
-        </div>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-bold" style={{ color: 'var(--cream)' }}>{greeting}, {profile.name?.split(' ')[0]}</h1>
-            <span className="text-xs px-2.5 py-1 rounded-full font-semibold"
-              style={{ background: roleColor + '20', color: roleColor, border: `1px solid ${roleColor}40` }}>
-              Designer
-            </span>
+      <div className="rounded-2xl p-4 md:p-6 flex flex-col md:flex-row md:items-start gap-4 md:gap-5" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+        <div className="flex items-center gap-4">
+          <div className="w-14 h-14 rounded-2xl flex items-center justify-center text-xl font-bold shrink-0"
+            style={{ background: profile.avatar_color || roleColor, color: '#08080F' }}>
+            {getInitials(profile.name || '?')}
           </div>
-          <p className="text-sm mt-0.5" style={{ color: 'var(--text-muted)' }}>
-            {now.toLocaleDateString('pt-PT', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
-          </p>
-          {totalAcao > 0 && (
-            <p className="text-sm mt-2 font-medium" style={{ color: '#f97316' }}>
-              Tens {totalAcao} post{totalAcao > 1 ? 's' : ''} à espera de ti
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h1 className="text-xl md:text-2xl font-bold" style={{ color: 'var(--cream)' }}>{greeting}, {profile.name?.split(' ')[0]}</h1>
+              <span className="text-xs px-2 py-0.5 rounded-full font-semibold"
+                style={{ background: roleColor + '20', color: roleColor, border: `1px solid ${roleColor}40` }}>
+                Designer
+              </span>
+            </div>
+            <p className="text-xs md:text-sm mt-0.5" style={{ color: 'var(--text-muted)' }}>
+              {now.toLocaleDateString('pt-PT', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
             </p>
-          )}
+            {totalAcao > 0 && (
+              <p className="text-sm mt-1 font-medium" style={{ color: '#f97316' }}>
+                Tens {totalAcao} post{totalAcao > 1 ? 's' : ''} à espera de ti
+              </p>
+            )}
+          </div>
         </div>
-        <div className="flex gap-3 shrink-0">
+        <div className="grid grid-cols-4 gap-2 md:flex md:gap-3 md:shrink-0">
           {[
             { v: postsParaCriar.length, l: 'Criar arte', c: '#f97316' },
             { v: postsParaEditar.length, l: 'Editar vídeo', c: roleColor },
             { v: postsEmAprovacao.length, l: 'Em aprovação', c: '#eab308' },
             { v: myClients.length, l: 'Clientes', c: 'white' },
           ].map(s => (
-            <div key={s.l} className="text-center px-4 py-2 rounded-xl" style={{ background: 'var(--surface-2)' }}>
-              <div className="text-xl font-bold" style={{ color: s.v > 0 ? s.c : 'white' }}>{s.v}</div>
+            <div key={s.l} className="text-center px-2 md:px-4 py-2 rounded-xl" style={{ background: 'var(--surface-2)' }}>
+              <div className="text-lg md:text-xl font-bold" style={{ color: s.v > 0 ? s.c : 'white' }}>{s.v}</div>
               <div className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>{s.l}</div>
             </div>
           ))}

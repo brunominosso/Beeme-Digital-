@@ -106,15 +106,29 @@ function AdminView({ profile, myClients, allTasks, upcomingMeetings, todayStr, t
     }))
 
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-6">
+    <div className="p-4 md:p-6 max-w-7xl mx-auto space-y-4 md:space-y-6">
 
       {/* Hero */}
-      <div className="rounded-2xl p-6 flex items-start gap-5" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
-        <div className="w-14 h-14 rounded-2xl flex items-center justify-center text-xl font-bold shrink-0 text-white"
-          style={{ background: profile.avatar_color || roleColor }}>
-          {getInitials(profile.name || '?')}
+      <div className="rounded-2xl p-4 md:p-6 flex flex-col md:flex-row md:items-start gap-4 md:gap-5" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+        <div className="flex items-center gap-4 md:contents">
+          <div className="w-14 h-14 rounded-2xl flex items-center justify-center text-xl font-bold shrink-0 text-white"
+            style={{ background: profile.avatar_color || roleColor }}>
+            {getInitials(profile.name || '?')}
+          </div>
+          <div className="flex-1 min-w-0 md:hidden">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h1 className="text-xl font-bold text-white">{greeting}, {profile.name?.split(' ')[0]}</h1>
+              <span className="text-xs px-2 py-0.5 rounded-full font-semibold"
+                style={{ background: roleColor + '20', color: roleColor, border: `1px solid ${roleColor}40` }}>
+                Admin
+              </span>
+            </div>
+            <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
+              {now.toLocaleDateString('pt-PT', { weekday: 'long', day: 'numeric', month: 'long' })}
+            </p>
+          </div>
         </div>
-        <div className="flex-1 min-w-0">
+        <div className="flex-1 min-w-0 hidden md:block">
           <div className="flex items-center gap-3">
             <h1 className="text-2xl font-bold text-white">{greeting}, {profile.name?.split(' ')[0]}</h1>
             <span className="text-xs px-2.5 py-1 rounded-full font-semibold"
@@ -126,15 +140,15 @@ function AdminView({ profile, myClients, allTasks, upcomingMeetings, todayStr, t
             {now.toLocaleDateString('pt-PT', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
           </p>
         </div>
-        <div className="flex gap-3 shrink-0">
+        <div className="grid grid-cols-4 gap-2 md:flex md:gap-3 md:shrink-0">
           {[
             { v: myClients.length, l: 'Clientes', c: '#4ade80' },
             { v: allProfiles.length, l: 'Equipa', c: roleColor },
             { v: urgentTasks.length, l: 'Urgentes', c: urgentTasks.length > 0 ? 'var(--danger)' : 'white' },
-            { v: todayMeetings.length, l: 'Reuniões hoje', c: todayMeetings.length > 0 ? '#6c63ff' : 'white' },
+            { v: todayMeetings.length, l: 'Reuniões', c: todayMeetings.length > 0 ? '#6c63ff' : 'white' },
           ].map(s => (
-            <div key={s.l} className="text-center px-4 py-2 rounded-xl" style={{ background: 'var(--surface-2)' }}>
-              <div className="text-xl font-bold" style={{ color: s.c }}>{s.v}</div>
+            <div key={s.l} className="text-center px-2 md:px-4 py-2 rounded-xl" style={{ background: 'var(--surface-2)' }}>
+              <div className="text-lg md:text-xl font-bold" style={{ color: s.c }}>{s.v}</div>
               <div className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>{s.l}</div>
             </div>
           ))}
@@ -142,7 +156,7 @@ function AdminView({ profile, myClients, allTasks, upcomingMeetings, todayStr, t
       </div>
 
       {/* Quick actions */}
-      <div className="grid grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
           { href: '/admin', label: 'Gerir equipa', icon: '👥', color: roleColor },
           { href: '/leads', label: 'Leads & Clientes', icon: '📊', color: '#4ade80' },
@@ -165,7 +179,7 @@ function AdminView({ profile, myClients, allTasks, upcomingMeetings, todayStr, t
             <h2 className="text-sm font-semibold" style={{ color: 'var(--text-muted)' }}>EQUIPA — CARGA ATUAL</h2>
             <Link href="/admin" className="text-xs" style={{ color: 'var(--accent)' }}>Gerir →</Link>
           </div>
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
             {teamWithStats.map(member => (
               <button key={member.id}
                 onClick={() => router.push(`/admin/preview/${member.id}`)}
@@ -213,10 +227,10 @@ function AdminView({ profile, myClients, allTasks, upcomingMeetings, todayStr, t
           </h2>
           <Link href="/conteudos?view=kanban" className="text-xs" style={{ color: 'var(--accent)' }}>Ver kanban →</Link>
         </div>
-        <div className="grid grid-cols-8 gap-2">
+        <div className="flex gap-2 overflow-x-auto pb-1 md:grid md:grid-cols-8">
           {postsByStatus.map(s => (
             <Link key={s.key} href={`/conteudos?view=kanban`}
-              className="rounded-xl p-3 text-center hover:opacity-90 transition-opacity"
+              className="rounded-xl p-3 text-center hover:opacity-90 transition-opacity shrink-0 min-w-[80px] md:min-w-0"
               style={{ background: 'var(--surface)', border: `1px solid ${s.count > 0 ? s.color + '30' : 'var(--border)'}` }}>
               <div className="text-xl font-bold" style={{ color: s.count > 0 ? s.color : 'var(--text-muted)' }}>{s.count}</div>
               <div className="text-xs mt-1 leading-tight" style={{ color: 'var(--text-muted)' }}>{s.label}</div>
@@ -226,7 +240,7 @@ function AdminView({ profile, myClients, allTasks, upcomingMeetings, todayStr, t
       </div>
 
       {/* Clients + Meetings */}
-      <div className="grid grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
 
         <div className="rounded-xl overflow-hidden" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
           <div className="px-5 py-4 border-b flex items-center justify-between" style={{ borderColor: 'var(--border)' }}>
@@ -413,15 +427,29 @@ function GestorView({ profile, myClients, allTasks, upcomingMeetings, todayStr, 
   const inputStyle = { background: 'var(--surface-2)', border: '1px solid var(--border)' }
 
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-6">
+    <div className="p-4 md:p-6 max-w-7xl mx-auto space-y-4 md:space-y-6">
 
       {/* Hero */}
-      <div className="rounded-2xl p-6 flex items-start gap-5" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
-        <div className="w-14 h-14 rounded-2xl flex items-center justify-center text-xl font-bold text-white shrink-0"
-          style={{ background: profile.avatar_color || roleColor }}>
-          {getInitials(profile.name || '?')}
+      <div className="rounded-2xl p-4 md:p-6 flex flex-col md:flex-row md:items-start gap-4 md:gap-5" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+        <div className="flex items-center gap-4 md:contents">
+          <div className="w-14 h-14 rounded-2xl flex items-center justify-center text-xl font-bold text-white shrink-0"
+            style={{ background: profile.avatar_color || roleColor }}>
+            {getInitials(profile.name || '?')}
+          </div>
+          <div className="flex-1 min-w-0 md:hidden">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h1 className="text-xl font-bold text-white">{greeting}, {profile.name?.split(' ')[0] || 'aí'}</h1>
+              <span className="text-xs px-2 py-0.5 rounded-full font-semibold"
+                style={{ background: roleColor + '20', color: roleColor, border: `1px solid ${roleColor}40` }}>
+                {roleLabel}
+              </span>
+            </div>
+            <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
+              {now.toLocaleDateString('pt-PT', { weekday: 'long', day: 'numeric', month: 'long' })}
+            </p>
+          </div>
         </div>
-        <div className="flex-1 min-w-0">
+        <div className="flex-1 min-w-0 hidden md:block">
           <div className="flex items-center gap-3 flex-wrap">
             <h1 className="text-2xl font-bold text-white">{greeting}, {profile.name?.split(' ')[0] || 'aí'}</h1>
             <span className="text-xs px-2.5 py-1 rounded-full font-semibold"
@@ -462,14 +490,14 @@ function GestorView({ profile, myClients, allTasks, upcomingMeetings, todayStr, 
             )}
           </div>
         </div>
-        <div className="flex gap-3 shrink-0">
+        <div className="grid grid-cols-3 gap-2 md:flex md:gap-3 md:shrink-0">
           {[
             { v: activeClients.length, l: 'Clientes', c: '#4ade80' },
             { v: todayCount, l: 'Hoje', c: todayCount > 0 ? '#f59e0b' : 'white' },
             { v: scheduledMeetings.length, l: 'Reuniões', c: scheduledMeetings.length > 0 ? roleColor : 'white' },
           ].map(s => (
-            <div key={s.l} className="text-center px-4 py-2 rounded-xl" style={{ background: 'var(--surface-2)' }}>
-              <div className="text-xl font-bold" style={{ color: s.c }}>{s.v}</div>
+            <div key={s.l} className="text-center px-2 md:px-4 py-2 rounded-xl" style={{ background: 'var(--surface-2)' }}>
+              <div className="text-lg md:text-xl font-bold" style={{ color: s.c }}>{s.v}</div>
               <div className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>{s.l}</div>
             </div>
           ))}
@@ -477,7 +505,7 @@ function GestorView({ profile, myClients, allTasks, upcomingMeetings, todayStr, 
       </div>
 
       {/* Quick actions */}
-      <div className="grid grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
           { href: '/leads', label: 'Leads & Clientes', icon: '👥', color: '#4ade80' },
           { href: '/meetings', label: 'Reuniões', icon: '📅', color: roleColor },
@@ -500,7 +528,7 @@ function GestorView({ profile, myClients, allTasks, upcomingMeetings, todayStr, 
             <h2 className="text-sm font-semibold" style={{ color: 'var(--text-muted)' }}>SEUS CLIENTES</h2>
             <Link href="/leads" className="text-xs" style={{ color: 'var(--accent)' }}>Ver todos →</Link>
           </div>
-          <div className="grid grid-cols-5 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
             {myClients.slice(0, 10).map(c => (
               <button key={c.id} onClick={() => router.push(`/leads/${c.id}`)}
                 className="rounded-xl overflow-hidden text-left hover:opacity-90 transition-opacity"
@@ -708,7 +736,7 @@ function GestorView({ profile, myClients, allTasks, upcomingMeetings, todayStr, 
           <h2 className="font-semibold text-white">Reuniões próximas</h2>
           <Link href="/meetings" className="text-xs" style={{ color: 'var(--accent)' }}>Ver todas →</Link>
         </div>
-        <div className="grid grid-cols-3 gap-2 p-3 max-h-48 overflow-y-auto">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 p-3 max-h-48 overflow-y-auto">
           {scheduledMeetings.length === 0 ? (
             <div className="col-span-3 flex items-center justify-center h-16 text-sm" style={{ color: 'var(--text-muted)' }}>
               Sem reuniões agendadas

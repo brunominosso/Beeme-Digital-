@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
-import Sidebar from '@/components/Sidebar'
+import DashboardShell from '@/components/DashboardShell'
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient()
@@ -12,11 +12,8 @@ export default async function DashboardLayout({ children }: { children: React.Re
   const role = (profileData as unknown as { role: string } | null)?.role ?? 'gestor'
 
   return (
-    <div className="flex h-screen overflow-hidden" style={{ background: 'var(--background)' }}>
-      <Sidebar user={user} role={role} />
-      <main className="flex-1 overflow-y-auto">
-        {children}
-      </main>
-    </div>
+    <DashboardShell user={user} role={role}>
+      {children}
+    </DashboardShell>
   )
 }
