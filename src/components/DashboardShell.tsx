@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import Sidebar from './Sidebar'
+import NotificationsPanel from './NotificationsPanel'
 import type { User } from '@supabase/supabase-js'
 
 interface Props {
@@ -17,6 +18,7 @@ const PAGE_TITLES: Record<string, string> = {
   '/leads': 'Leads & Clientes',
   '/conteudos': 'Conteúdos',
   '/kanban': 'Tarefas',
+  '/pautas': 'Pautas',
   '/meetings': 'Reuniões',
   '/goals': 'Metas & OKR',
   '/financial': 'Financeiro',
@@ -110,12 +112,15 @@ export default function DashboardShell({ user, role, children }: Props) {
             </span>
           </div>
 
-          {/* Avatar */}
-          <div
-            className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold"
-            style={{ background: 'var(--lavanda)', color: '#08080F' }}
-          >
-            {initials}
+          {/* Notificações + Avatar */}
+          <div className="flex items-center gap-2">
+            <NotificationsPanel />
+            <div
+              className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold"
+              style={{ background: 'var(--lavanda)', color: '#08080F' }}
+            >
+              {initials}
+            </div>
           </div>
         </header>
 

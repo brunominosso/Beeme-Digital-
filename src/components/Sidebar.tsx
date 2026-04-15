@@ -1,9 +1,12 @@
 'use client'
 
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import type { User } from '@supabase/supabase-js'
+import NotificationsPanel from './NotificationsPanel'
+import SearchModal from './SearchModal'
 
 type NavItem = { href: string; label: string; icon: string; exact: boolean; adminOnly?: boolean; roles?: string[] }
 type NavGroup = { section: string | null; items: NavItem[] }
@@ -16,6 +19,7 @@ const NAV: NavGroup[] = [
     { href: '/leads',      label: 'Leads & Clientes', icon: '👥', exact: false, roles: ['admin','gestor','social_media','designer','editor','financeiro'] },
     { href: '/conteudos',  label: 'Conteúdos',        icon: '🎨', exact: false, roles: ['admin','social_media','designer','editor'] },
     { href: '/kanban',     label: 'Tarefas',           icon: '📋', exact: false, roles: ['admin','gestor','social_media','designer','editor'] },
+    { href: '/pautas',     label: 'Pautas',              icon: '📆', exact: false, roles: ['admin','gestor','social_media','designer'] },
     { href: '/meetings',   label: 'Reuniões',           icon: '📅', exact: false, roles: ['admin','gestor','social_media'] },
     { href: '/goals',      label: 'Metas & OKR',        icon: '🎯', exact: false, roles: ['admin','gestor'] },
     { href: '/financial',  label: 'Financeiro',          icon: '💰', exact: false, roles: ['admin','financeiro'] },
@@ -39,6 +43,18 @@ interface Props {
 export default function Sidebar({ user, role, isOpen = false, onClose }: Props) {
   const pathname = usePathname()
   const router = useRouter()
+  const [searchOpen, setSearchOpen] = useState(false)
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault()
+        setSearchOpen(true)
+      }
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [])
 
   async function handleLogout() {
     const supabase = createClient()
@@ -92,6 +108,22 @@ export default function Sidebar({ user, role, isOpen = false, onClose }: Props) 
 
       {/* Nav */}
       <nav className="flex-1 px-2 py-3 overflow-y-auto space-y-4">
+        {/* Search trigger */}
+        <button
+          onClick={() => setSearchOpen(true)}
+          className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-all"
+          style={{ background: 'var(--surface-2)', color: 'var(--text-muted)' }}
+        >
+          <span className="text-base leading-none">🔍</span>
+          <span className="flex-1 text-left">Buscar</span>
+          <kbd
+            className="text-xs px-1.5 py-0.5 rounded"
+            style={{ background: 'var(--border)', color: 'var(--text-muted)', fontFamily: 'inherit' }}
+          >
+            ⌘K
+          </kbd>
+        </button>
+
         {NAV.filter(group => group.section !== 'ADMIN' || role === 'admin').map((group, i) => {
           const visibleItems = group.items.filter(item => {
             if (item.adminOnly && role !== 'admin') return false
@@ -128,8 +160,16 @@ export default function Sidebar({ user, role, isOpen = false, onClose }: Props) 
         })}
       </nav>
 
-      {/* User */}
-      <div className="px-3 py-3 border-t" style={{ borderColor: 'var(--border)' }}>
+      {/* Footer */}
+      <div className="border-t" style={{ borderColor: 'var(--border)' }}>
+        {/* Notifications row */}
+        <div className="flex items-center justify-between px-5 py-2" style={{ borderBottom: '1px solid var(--border)' }}>
+          <span className="text-xs" style={{ color: 'var(--text-muted)' }}>Notificações</span>
+          <NotificationsPanel />
+        </div>
+
+        {/* User */}
+        <div className="px-3 py-3">
         <div className="flex items-center gap-2.5 px-2 py-1.5 rounded-lg">
           <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0"
             style={{ background: 'var(--lavanda)', color: '#08080F' }}>
@@ -147,7 +187,10 @@ export default function Sidebar({ user, role, isOpen = false, onClose }: Props) 
             ⏏
           </button>
         </div>
+        </div>
       </div>
+
+      <SearchModal open={searchOpen} onClose={() => setSearchOpen(false)} />
     </aside>
   )
 }

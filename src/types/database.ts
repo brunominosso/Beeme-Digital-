@@ -57,6 +57,7 @@ export interface Database {
           expectations: string | null
           responsible_ids: string[] | null
           approval_token: string | null
+          approval_token_expires_at: string | null
           created_at: string
           updated_at: string
         }
@@ -88,6 +89,7 @@ export interface Database {
           expectations?: string | null
           responsible_ids?: string[] | null
           approval_token?: string | null
+          approval_token_expires_at?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -491,6 +493,45 @@ export interface Database {
         }
         Relationships: []
       }
+      pautas: {
+        Row: {
+          id: string
+          client_id: string | null
+          assignee_id: string
+          tipo: string
+          data: string
+          turno: string
+          status: string
+          notas: string | null
+          created_by: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          client_id?: string | null
+          assignee_id: string
+          tipo: string
+          data: string
+          turno?: string
+          status?: string
+          notas?: string | null
+          created_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          client_id?: string | null
+          assignee_id?: string
+          tipo?: string
+          data?: string
+          turno?: string
+          status?: string
+          notas?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       posts: {
         Row: {
           id: string
@@ -507,6 +548,11 @@ export interface Database {
           notes: string | null
           files: { name: string; url: string; type: string; size: number }[] | null
           approval_notes: string | null
+          approval_notes_history: { version: number; notes: string; date: string; reviewer: string }[] | null
+          caption: string | null
+          cta: string | null
+          hashtags: string[] | null
+          delivery_url: string | null
           created_at: string
           updated_at: string
         }
@@ -525,6 +571,11 @@ export interface Database {
           notes?: string | null
           files?: { name: string; url: string; type: string; size: number }[] | null
           approval_notes?: string | null
+          approval_notes_history?: { version: number; notes: string; date: string; reviewer: string }[] | null
+          caption?: string | null
+          cta?: string | null
+          hashtags?: string[] | null
+          delivery_url?: string | null
         }
         Update: {
           title?: string
@@ -539,6 +590,11 @@ export interface Database {
           notes?: string | null
           files?: { name: string; url: string; type: string; size: number }[] | null
           approval_notes?: string | null
+          approval_notes_history?: { version: number; notes: string; date: string; reviewer: string }[] | null
+          caption?: string | null
+          cta?: string | null
+          hashtags?: string[] | null
+          delivery_url?: string | null
           updated_at?: string
         }
         Relationships: []
@@ -565,3 +621,4 @@ export type Service = Database['public']['Tables']['services']['Row']
 export type Post = Database['public']['Tables']['posts']['Row']
 export type PaymentSchedule = Database['public']['Tables']['payment_schedules']['Row']
 export type TaskTemplate = Database['public']['Tables']['task_templates']['Row']
+export type Pauta = Database['public']['Tables']['pautas']['Row']
