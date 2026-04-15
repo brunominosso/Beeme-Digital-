@@ -31,7 +31,7 @@ export default async function PipelinePage() {
   ] = await Promise.all([
     supabase
       .from('clients')
-      .select('id, name, status, responsible_ids, avatar_color')
+      .select('id, name, status, responsible_ids')
       .eq('status', 'ativo')
       .order('name'),
     supabase
