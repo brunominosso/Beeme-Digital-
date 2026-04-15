@@ -34,14 +34,14 @@ export default async function PautasPage() {
       .lte('data', rangeEnd.toISOString().split('T')[0])
       .order('data')
       .order('turno'),
-    supabase.from('clients').select('id, name, status').order('name'),
+    supabase.from('clients').select('id, name, status, responsible_ids').order('name'),
     supabase.from('profiles').select('id, name, role, avatar_color').order('name'),
   ])
 
   return (
     <PautasView
       initialPautas={(rawPautas as Pauta[]) ?? []}
-      clients={(rawClients as Pick<Client, 'id' | 'name' | 'status'>[]) ?? []}
+      clients={(rawClients as Pick<Client, 'id' | 'name' | 'status' | 'responsible_ids'>[]) ?? []}
       profiles={(rawProfiles as Pick<Profile, 'id' | 'name' | 'role' | 'avatar_color'>[]) ?? []}
       userRole={userRole}
       currentUserId={user!.id}

@@ -75,7 +75,7 @@ function formatWeekRange(days: Date[]): string {
 
 interface Props {
   initialPautas: Pauta[]
-  clients: Pick<Client, 'id' | 'name' | 'status'>[]
+  clients: Pick<Client, 'id' | 'name' | 'status' | 'responsible_ids'>[]
   profiles: Pick<Profile, 'id' | 'name' | 'role' | 'avatar_color'>[]
   userRole: string
   currentUserId: string
@@ -670,14 +670,30 @@ export default function PautasView({ initialPautas, clients, profiles, userRole,
               {/* Cliente */}
               <div>
                 <p className="label-caps mb-2">Cliente *</p>
-                <select value={fClient} onChange={e => setFClient(e.target.value)}
-                  className={inputClass}
-                  style={{ ...inputStyle, borderColor: !fClient ? 'var(--accent)' : 'var(--border)' } as React.CSSProperties}>
-                  <option value="">Seleciona o cliente...</option>
-                  {clients.map(c => (
-                    <option key={c.id} value={c.id}>{c.name}</option>
-                  ))}
-                </select>
+                {(() => {
+                  const filteredClients = clients.filter(c => {
+                    if (c.status !== 'ativo') return false
+                    if (!fAssignee) return true
+                    return (c.responsible_ids ?? []).includes(fAssignee)
+                  })
+                  return (
+                    <>
+                      <select value={fClient} onChange={e => setFClient(e.target.value)}
+                        className={inputClass}
+                        style={{ ...inputStyle, borderColor: !fClient ? 'var(--accent)' : 'var(--border)' } as React.CSSProperties}>
+                        <option value="">Seleciona o cliente...</option>
+                        {filteredClients.map(c => (
+                          <option key={c.id} value={c.id}>{c.name}</option>
+                        ))}
+                      </select>
+                      {fAssignee && filteredClients.length === 0 && (
+                        <p className="text-xs mt-1.5" style={{ color: 'var(--warning)' }}>
+                          Nenhum cliente ativo atribuído a este colaborador.
+                        </p>
+                      )}
+                    </>
+                  )
+                })()}
               </div>
 
               {/* Colaborador */}
