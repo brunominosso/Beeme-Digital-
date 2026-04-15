@@ -15,16 +15,21 @@ type TipoConfig = {
 }
 
 const TIPOS: Record<string, TipoConfig> = {
-  onboarding:          { label: 'Onboarding',          color: '#4ade8018', border: '#4ade8040', dot: '#4ade80', roles: ['social_media'] },
-  mapa_mental:         { label: 'Mapa Mental',          color: '#a78bfa18', border: '#a78bfa40', dot: '#a78bfa', roles: ['social_media'] },
-  planejamento:        { label: 'Planejamento',         color: '#9FA4DB18', border: '#9FA4DB40', dot: '#9FA4DB', roles: ['social_media'] },
-  roteiro:             { label: 'Roteiro / Briefing',   color: '#60a5fa18', border: '#60a5fa40', dot: '#60a5fa', roles: ['social_media'] },
-  captacao:            { label: 'Captação',             color: '#fb923c18', border: '#fb923c40', dot: '#fb923c', roles: ['social_media'] },
-  edicao_video:        { label: 'Edição de Vídeo',      color: '#f4727218', border: '#f4727240', dot: '#f47272', roles: ['social_media', 'designer'] },
-  edicao_foto:         { label: 'Criação de Estáticos', color: '#2dd4bf18', border: '#2dd4bf40', dot: '#2dd4bf', roles: ['designer'] },
-  reuniao_alinhamento: { label: 'Reunião de Alinhamento', color: '#fbbf2418', border: '#fbbf2440', dot: '#fbbf24', roles: ['social_media', 'designer'] },
-  aprovacao:           { label: 'Revisão / Aprovação',  color: '#34d39918', border: '#34d39940', dot: '#34d399', roles: ['social_media'] },
-  outro:               { label: 'Outro',                color: '#94a3b818', border: '#94a3b840', dot: '#94a3b8', roles: ['social_media', 'designer'] },
+  // ── Social Media ──────────────────────────────────────────
+  reuniao_onboarding:  { label: 'Reunião Onboarding',    color: '#4ade8018', border: '#4ade8040', dot: '#4ade80', roles: ['social_media'] },
+  reuniao_mensal:      { label: 'Reunião Mensal',         color: '#34d39918', border: '#34d39940', dot: '#34d399', roles: ['social_media'] },
+  mapa_mental:         { label: 'Criação Mapa Mental',    color: '#a78bfa18', border: '#a78bfa40', dot: '#a78bfa', roles: ['social_media'] },
+  planejamento:        { label: 'Planejamento Mensal',    color: '#9FA4DB18', border: '#9FA4DB40', dot: '#9FA4DB', roles: ['social_media'] },
+  roteiro:             { label: 'Roteiro / Briefing',     color: '#60a5fa18', border: '#60a5fa40', dot: '#60a5fa', roles: ['social_media'] },
+  captacao:            { label: 'Captação Externa',       color: '#fb923c18', border: '#fb923c40', dot: '#fb923c', roles: ['social_media'] },
+  aprovacao:           { label: 'Revisão / Aprovação',    color: '#f4727218', border: '#f4727240', dot: '#f47272', roles: ['social_media'] },
+  reuniao_alinhamento: { label: 'Reunião de Alinhamento', color: '#fbbf2418', border: '#fbbf2440', dot: '#fbbf24', roles: ['social_media'] },
+  // ── Designer ──────────────────────────────────────────────
+  edicao_cards:        { label: 'Edição de Cards',        color: '#2dd4bf18', border: '#2dd4bf40', dot: '#2dd4bf', roles: ['designer'] },
+  edicao_video:        { label: 'Edição de Vídeos',       color: '#e879f918', border: '#e879f940', dot: '#e879f9', roles: ['designer'] },
+  criacao_logo:        { label: 'Criação de Logomarca',   color: '#f59e0b18', border: '#f59e0b40', dot: '#f59e0b', roles: ['designer'] },
+  // ── Ambos ─────────────────────────────────────────────────
+  outro:               { label: 'Outro',                  color: '#94a3b818', border: '#94a3b840', dot: '#94a3b8', roles: ['social_media', 'designer'] },
 }
 
 const TURNOS = [
@@ -86,7 +91,7 @@ export default function PautasView({ initialPautas, clients, profiles, userRole,
   // Form state
   const [fAssignee, setFAssignee] = useState('')
   const [fClient, setFClient] = useState('')
-  const [fTipo, setFTipo] = useState('roteiro')
+  const [fTipo, setFTipo] = useState('reuniao_onboarding')
   const [fData, setFData] = useState('')
   const [fTurno, setFTurno] = useState('manha')
   const [fNotas, setFNotas] = useState('')
@@ -662,6 +667,19 @@ export default function PautasView({ initialPautas, clients, profiles, userRole,
 
             <div className="overflow-y-auto flex-1 p-6 space-y-4">
 
+              {/* Cliente */}
+              <div>
+                <p className="label-caps mb-2">Cliente *</p>
+                <select value={fClient} onChange={e => setFClient(e.target.value)}
+                  className={inputClass}
+                  style={{ ...inputStyle, borderColor: !fClient ? 'var(--accent)' : 'var(--border)' } as React.CSSProperties}>
+                  <option value="">Seleciona o cliente...</option>
+                  {clients.map(c => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+              </div>
+
               {/* Colaborador */}
               <div>
                 <p className="label-caps mb-2">Colaborador *</p>
@@ -741,18 +759,6 @@ export default function PautasView({ initialPautas, clients, profiles, userRole,
                 </div>
               </div>
 
-              {/* Cliente */}
-              <div>
-                <p className="label-caps mb-2">Cliente (opcional)</p>
-                <select value={fClient} onChange={e => setFClient(e.target.value)}
-                  className={inputClass} style={inputStyle}>
-                  <option value="">Sem cliente associado</option>
-                  {clients.map(c => (
-                    <option key={c.id} value={c.id}>{c.name}</option>
-                  ))}
-                </select>
-              </div>
-
               {/* Notas */}
               <div>
                 <p className="label-caps mb-2">Notas (opcional)</p>
@@ -770,7 +776,7 @@ export default function PautasView({ initialPautas, clients, profiles, userRole,
               )}
 
               <button onClick={savePauta}
-                disabled={!fAssignee || !fData || !fTipo || saving}
+                disabled={!fAssignee || !fData || !fTipo || !fClient || saving}
                 className="w-full py-2.5 rounded-lg text-sm font-semibold disabled:opacity-40 transition-opacity"
                 style={{ background: 'var(--accent)', color: '#08080F' }}>
                 {saving ? 'A criar...' : 'Criar pauta'}
