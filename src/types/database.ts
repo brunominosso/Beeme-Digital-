@@ -493,6 +493,37 @@ export interface Database {
         }
         Relationships: []
       }
+      producao_mensal: {
+        Row: {
+          id: string
+          client_id: string
+          mes: string
+          etapa: string
+          status: string
+          notas: string | null
+          updated_by: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          client_id: string
+          mes: string
+          etapa: string
+          status?: string
+          notas?: string | null
+          updated_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          status?: string
+          notas?: string | null
+          updated_by?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       pautas: {
         Row: {
           id: string
@@ -622,3 +653,4 @@ export type Post = Database['public']['Tables']['posts']['Row']
 export type PaymentSchedule = Database['public']['Tables']['payment_schedules']['Row']
 export type TaskTemplate = Database['public']['Tables']['task_templates']['Row']
 export type Pauta = Database['public']['Tables']['pautas']['Row']
+export type ProducaoMensal = Database['public']['Tables']['producao_mensal']['Row']

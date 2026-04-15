@@ -18,6 +18,7 @@ const PAGE_TITLES: Record<string, string> = {
   '/leads': 'Leads & Clientes',
   '/conteudos': 'Conteúdos',
   '/kanban': 'Tarefas',
+  '/pipeline': 'Pipeline de Produção',
   '/pautas': 'Pautas',
   '/meetings': 'Reuniões',
   '/goals': 'Metas & OKR',
