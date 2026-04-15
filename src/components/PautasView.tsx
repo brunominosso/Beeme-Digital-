@@ -2,7 +2,17 @@
 
 import { useState, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import type { Pauta, Client, Profile } from '@/types/database'
+import type { Pauta, Client, Profile, ProducaoMensal } from '@/types/database'
+
+// ── Mapeamento pauta → etapa do pipeline ─────────────────────
+const PAUTA_TO_PIPELINE: Record<string, string> = {
+  planejamento:  'planejamento',
+  captacao:      'captacao',
+  edicao_video:  'edicao',
+  edicao_cards:  'design',
+  aprovacao:     'revisao',
+  agendamento:   'agendamento',
+}
 
 // ── Tipos ────────────────────────────────────────────────────
 
@@ -33,9 +43,9 @@ const TIPOS: Record<string, TipoConfig> = {
 }
 
 const TURNOS = [
-  { key: 'manha',    label: 'Manhã',    hora: '09h–12h' },
-  { key: 'tarde',    label: 'Tarde',    hora: '13h–17h' },
-  { key: 'dia_todo', label: 'Dia todo', hora: 'Dia todo' },
+  { key: 'manha',    label: 'Manhã' },
+  { key: 'tarde',    label: 'Tarde' },
+  { key: 'dia_todo', label: 'Dia todo' },
 ]
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
@@ -73,15 +83,28 @@ function formatWeekRange(days: Date[]): string {
 
 // ── Componente principal ──────────────────────────────────────
 
+// Etapas do pipeline com o tipo de pauta correspondente para criar
+const PIPELINE_ETAPAS: { key: string; label: string; pautaTipo: string; dot: string }[] = [
+  { key: 'planejamento', label: 'Planejamento',  pautaTipo: 'planejamento',  dot: '#9FA4DB' },
+  { key: 'alteracoes',   label: 'Alterações',    pautaTipo: 'roteiro',       dot: '#60a5fa' },
+  { key: 'captacao',     label: 'Captação',       pautaTipo: 'captacao',      dot: '#fb923c' },
+  { key: 'edicao',       label: 'Edição',         pautaTipo: 'edicao_video',  dot: '#e879f9' },
+  { key: 'design',       label: 'Design',          pautaTipo: 'edicao_cards',  dot: '#2dd4bf' },
+  { key: 'revisao',      label: 'Revisão',         pautaTipo: 'aprovacao',     dot: '#f47272' },
+  { key: 'agendamento',  label: 'Agendamento',    pautaTipo: 'agendamento',   dot: '#fbbf24' },
+]
+
 interface Props {
   initialPautas: Pauta[]
   clients: Pick<Client, 'id' | 'name' | 'status' | 'responsible_ids'>[]
   profiles: Pick<Profile, 'id' | 'name' | 'role' | 'avatar_color'>[]
+  producao?: ProducaoMensal[]
+  refMonthStr?: string
   userRole: string
   currentUserId: string
 }
 
-export default function PautasView({ initialPautas, clients, profiles, userRole, currentUserId }: Props) {
+export default function PautasView({ initialPautas, clients, profiles, producao = [], refMonthStr, userRole, currentUserId }: Props) {
   const [pautas, setPautas] = useState<Pauta[]>(initialPautas)
   const [weekRef, setWeekRef] = useState<Date>(new Date())
   const [showForm, setShowForm] = useState(false)
@@ -102,6 +125,23 @@ export default function PautasView({ initialPautas, clients, profiles, userRole,
   const [editStatus, setEditStatus] = useState('')
   const [editNotas, setEditNotas] = useState('')
   const [editingSave, setEditingSave] = useState(false)
+
+  // Painel de pendências
+  const [showPending, setShowPending] = useState(true)
+
+  // Pendências do pipeline por cliente
+  const pendencias = useMemo(() => {
+    return clients
+      .map(c => {
+        const faltam = PIPELINE_ETAPAS.filter(e => {
+          const rec = producao.find(r => r.client_id === c.id && r.etapa === e.key)
+          // Mostra como faltando se: sem registo, pendente, ou bloqueado
+          return !rec || rec.status === 'pendente' || rec.status === 'bloqueado'
+        })
+        return { client: c, faltam }
+      })
+      .filter(x => x.faltam.length > 0)
+  }, [clients, producao])
 
   const canEdit = userRole === 'admin' || userRole === 'gestor' || userRole === 'social_media'
 
@@ -192,11 +232,35 @@ export default function PautasView({ initialPautas, clients, profiles, userRole,
     if (!selected) return
     setEditingSave(true)
     const supabase = createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+
     await supabase.from('pautas').update({
       status: editStatus,
       notas: editNotas || null,
       updated_at: new Date().toISOString(),
     }).eq('id', selected.id)
+
+    // ── Sync automático com o pipeline ──────────────────────
+    // Quando marcada como concluída, atualiza a etapa correspondente no pipeline
+    if (editStatus === 'concluido' && selected.client_id) {
+      const etapa = PAUTA_TO_PIPELINE[selected.tipo]
+      if (etapa) {
+        // Mês de referência = próximo mês a partir da data da pauta
+        const pautaDate = new Date(selected.data + 'T12:00:00')
+        const refMonth = new Date(pautaDate.getFullYear(), pautaDate.getMonth() + 1, 1)
+        const refMonthStr = refMonth.toISOString().split('T')[0]
+
+        await supabase.from('producao_mensal').upsert({
+          client_id: selected.client_id,
+          mes: refMonthStr,
+          etapa,
+          status: 'concluido',
+          updated_by: user?.id,
+          notas: `Auto: pauta "${TIPOS[selected.tipo]?.label ?? selected.tipo}" concluída`,
+          updated_at: new Date().toISOString(),
+        }, { onConflict: 'client_id,mes,etapa' })
+      }
+    }
 
     const updated = { ...selected, status: editStatus, notas: editNotas || null }
     setPautas(prev => prev.map(p => p.id === selected.id ? updated : p))
@@ -270,6 +334,68 @@ export default function PautasView({ initialPautas, clients, profiles, userRole,
             </button>
           )}
         </div>
+
+        {/* Painel de pendências do pipeline */}
+        {/* Debug: clients={clients.length} producao={producao.length} pendencias={pendencias.length} */}
+        {(pendencias.length > 0 || (clients.length > 0 && producao.length === 0)) && (
+          <div className="border-b shrink-0" style={{ borderColor: 'var(--border)', background: '#fbbf2406' }}>
+            <button
+              onClick={() => setShowPending(v => !v)}
+              className="w-full px-6 py-2.5 flex items-center gap-2 text-left"
+            >
+              <span className="text-xs font-semibold" style={{ color: '#fbbf24' }}>
+                ⚠ {pendencias.length} cliente{pendencias.length > 1 ? 's' : ''} com etapas em falta no pipeline
+              </span>
+              <span className="ml-auto text-xs" style={{ color: 'var(--text-dim)' }}>
+                {showPending ? '▲ ocultar' : '▼ ver'}
+              </span>
+            </button>
+
+            {showPending && (
+              <div className="px-6 pb-4 grid grid-cols-1 gap-2 md:grid-cols-2 lg:grid-cols-3">
+                {pendencias.map(({ client, faltam }) => (
+                  <div key={client.id} className="rounded-xl p-3"
+                    style={{ background: 'var(--surface-2)', border: '1px solid var(--border)' }}>
+                    <p className="text-xs font-semibold mb-2" style={{ color: 'var(--cream)' }}>
+                      {client.name}
+                    </p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {faltam.map(e => {
+                        // Encontra assignee padrão (primeiro SM para etapas SM, designer para design/edição)
+                        const isDesignerEtapa = e.key === 'design' || e.key === 'edicao'
+                        const defaultRole = isDesignerEtapa ? 'designer' : 'social_media'
+                        const defaultAssignee = profiles.find(p => p.role === defaultRole)?.id ?? ''
+
+                        return (
+                          <button
+                            key={e.key}
+                            onClick={() => {
+                              setFClient(client.id)
+                              setFTipo(e.pautaTipo)
+                              setFAssignee(defaultAssignee)
+                              setFData(toDateStr(new Date()))
+                              setFTurno('manha')
+                              setFNotas('')
+                              setSaveError('')
+                              setShowForm(true)
+                            }}
+                            className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs transition-all hover:opacity-80"
+                            style={{ background: e.dot + '18', border: `1px solid ${e.dot}40`, color: e.dot }}
+                            title={`Criar pauta: ${e.label} para ${client.name}`}
+                          >
+                            <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: e.dot }} />
+                            {e.label}
+                            <span style={{ opacity: 0.6 }}>+</span>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Toolbar: navegação semana + filtro role */}
         <div className="px-6 py-3 border-b shrink-0 flex items-center gap-4"
@@ -393,12 +519,12 @@ export default function PautasView({ initialPautas, clients, profiles, userRole,
                           </div>
                         ) : (
                           <p className="text-xs" style={{ color: 'var(--text-dim)', fontSize: '0.65rem' }}>
-                            {turno.hora}
+                            {turno.label}
                           </p>
                         )}
                         {isFirstRow && (
                           <p className="text-xs mt-3" style={{ color: 'var(--text-dim)', fontSize: '0.65rem' }}>
-                            {turno.hora}
+                            {turno.label}
                           </p>
                         )}
                       </td>
@@ -564,9 +690,6 @@ export default function PautasView({ initialPautas, clients, profiles, userRole,
                 <p className="label-caps mb-1">Turno</p>
                 <p className="text-sm" style={{ color: 'var(--cream)' }}>
                   {TURNOS.find(t => t.key === selected.turno)?.label ?? selected.turno}
-                  <span className="ml-2 text-xs" style={{ color: 'var(--text-muted)' }}>
-                    {TURNOS.find(t => t.key === selected.turno)?.hora}
-                  </span>
                 </p>
               </div>
 
@@ -769,7 +892,6 @@ export default function PautasView({ initialPautas, clients, profiles, userRole,
                         color: fTurno === t.key ? '#08080F' : 'var(--text-muted)',
                       }}>
                       {t.label}
-                      <span className="block opacity-60" style={{ fontSize: '0.6rem' }}>{t.hora}</span>
                     </button>
                   ))}
                 </div>
