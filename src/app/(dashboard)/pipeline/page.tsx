@@ -4,7 +4,6 @@ import type { Client, Profile, ProducaoMensal } from '@/types/database'
 
 export const dynamic = 'force-dynamic'
 
-// Mapeamento: tipo de pauta → etapa do pipeline
 const PAUTA_ETAPA: Record<string, string> = {
   planejamento:  'planejamento',
   captacao:      'captacao',
@@ -23,13 +22,10 @@ export default async function PipelinePage() {
 
   const userRole = (rawProfile as any)?.role ?? 'social_media'
 
-  // Mês de referência: próximo mês
   const now = new Date()
   const refMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1)
   const refMonthStr = refMonth.toISOString().split('T')[0]
   const currentMonthStr = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0]
-
-  // Intervalo de datas do mês de referência para buscar pautas
   const refStart = refMonthStr
   const refEnd = new Date(refMonth.getFullYear(), refMonth.getMonth() + 1, 0).toISOString().split('T')[0]
 
@@ -39,6 +35,7 @@ export default async function PipelinePage() {
     { data: rawProducao },
     { data: rawPautas },
     { data: rawPosts },
+    { data: rawAjustePosts }, // posts em design_ajuste (qualquer data — alterações são do ciclo atual)
   ] = await Promise.all([
     supabase.from('profiles').select('id, name, role, avatar_color')
       .in('role', ['social_media', 'designer', 'admin', 'gestor']),
@@ -49,44 +46,44 @@ export default async function PipelinePage() {
       .gte('data', refStart).lte('data', refEnd),
     supabase.from('posts').select('client_id, status, publish_date')
       .gte('publish_date', refStart).lte('publish_date', refEnd),
+    // Posts em ajuste — sem filtro de data para capturar ciclo atual
+    supabase.from('posts').select('client_id, status')
+      .eq('status', 'design_ajuste'),
   ])
 
-  // IDs de Paloma (social_media) e Lorenzo (designer)
   const teamIds = (rawProfiles ?? [])
     .filter((p: any) => p.role === 'social_media' || p.role === 'designer')
     .map((p: any) => p.id)
 
-  // Só clientes com Paloma ou Lorenzo como responsável
   const clients = (rawAllClients ?? []).filter((c: any) =>
     (c.responsible_ids ?? []).some((id: string) => teamIds.includes(id))
   )
 
-  // ── Auto-popular: derivar status das pautas concluídas ──────
+  // ── Contagem de posts em ajuste por cliente ──────────────
+  const ajusteCount: Record<string, number> = {}
+  for (const post of (rawAjustePosts ?? []) as any[]) {
+    if (!post.client_id) continue
+    ajusteCount[post.client_id] = (ajusteCount[post.client_id] ?? 0) + 1
+  }
+
+  // ── Auto-popular: pautas concluídas + posts + alterações ──
   const existingKeys = new Set(
     (rawProducao ?? []).map((r: any) => `${r.client_id}__${r.mes}__${r.etapa}`)
   )
 
-  const autoInserts: any[] = []
+  const autoUpserts: any[] = []
 
-  // 1. Pautas concluídas → etapas correspondentes
+  // 1. Pautas concluídas → etapas
   for (const pauta of (rawPautas ?? []) as any[]) {
     const etapa = PAUTA_ETAPA[pauta.tipo]
-    if (!etapa || !pauta.client_id) continue
-    if (pauta.status !== 'concluido') continue
-    const key = `${pauta.client_id}__${refMonthStr}__${etapa}`
-    if (!existingKeys.has(key)) {
-      autoInserts.push({
-        client_id: pauta.client_id,
-        mes: refMonthStr,
-        etapa,
-        status: 'concluido',
-        notas: 'Auto: pauta concluída',
-      })
-      existingKeys.add(key)
-    }
+    if (!etapa || !pauta.client_id || pauta.status !== 'concluido') continue
+    autoUpserts.push({
+      client_id: pauta.client_id, mes: refMonthStr, etapa,
+      status: 'concluido', notas: 'Auto: pauta concluída',
+    })
   }
 
-  // 2. Posts todos agendados → etapa agendamento
+  // 2. Posts todos publicados → agendamento concluído
   const postsByClient: Record<string, any[]> = {}
   for (const post of (rawPosts ?? []) as any[]) {
     if (!post.client_id) continue
@@ -94,27 +91,47 @@ export default async function PipelinePage() {
     postsByClient[post.client_id].push(post)
   }
   for (const [clientId, posts] of Object.entries(postsByClient)) {
-    const allPosted = posts.length > 0 && posts.every((p: any) => p.status === 'sm_postado')
-    if (!allPosted) continue
-    const key = `${clientId}__${refMonthStr}__agendamento`
-    if (!existingKeys.has(key)) {
-      autoInserts.push({
+    if (posts.length > 0 && posts.every((p: any) => p.status === 'sm_postado')) {
+      autoUpserts.push({
         client_id: clientId, mes: refMonthStr, etapa: 'agendamento',
         status: 'concluido', notas: 'Auto: todos os posts publicados',
       })
-      existingKeys.add(key)
     }
   }
 
-  // Inserir auto-derivados (upsert silencioso)
-  if (autoInserts.length > 0) {
-    await supabase.from('producao_mensal').upsert(autoInserts, {
-      onConflict: 'client_id,mes,etapa',
-      ignoreDuplicates: true,
+  // 3. Alterações — semáforo baseado em posts em design_ajuste
+  for (const client of clients as any[]) {
+    const count = ajusteCount[client.id] ?? 0
+    let status: string
+    let notas: string
+
+    if (count === 0) {
+      // Sem ajustes pendentes — verde
+      status = 'concluido'
+      notas = 'Auto: sem alterações pendentes'
+    } else if (count <= 2) {
+      // 1-2 posts em ajuste — amarelo
+      status = 'em_andamento'
+      notas = `Auto: ${count} post${count > 1 ? 's' : ''} em ajuste pelo designer`
+    } else {
+      // 3+ posts em ajuste — vermelho
+      status = 'bloqueado'
+      notas = `Auto: ${count} posts em ajuste — atenção necessária`
+    }
+
+    autoUpserts.push({
+      client_id: client.id, mes: refMonthStr, etapa: 'alteracoes',
+      status, notas,
     })
   }
 
-  // Re-fetch após auto inserts
+  // Upsert tudo (sobrescreve registros existentes para manter status atualizado)
+  if (autoUpserts.length > 0) {
+    await supabase.from('producao_mensal').upsert(autoUpserts, {
+      onConflict: 'client_id,mes,etapa',
+    })
+  }
+
   const { data: finalProducao } = await supabase
     .from('producao_mensal').select('*').in('mes', [refMonthStr, currentMonthStr])
 

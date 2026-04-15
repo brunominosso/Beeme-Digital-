@@ -341,12 +341,17 @@ export default function PipelineView({
                 {ETAPAS.map(e => (
                   <th key={e.key} className="px-2 py-3 text-center border-b border-r"
                     style={{ background: 'var(--surface)', borderColor: 'var(--border)', minWidth: 110 }}>
-                    <p className="text-xs font-semibold" style={{ color: 'var(--cream)' }}>{e.short}</p>
+                    <p className="text-xs font-semibold" style={{ color: 'var(--cream)' }}>
+                      {e.short}
+                      {e.key === 'alteracoes' && (
+                        <span className="ml-1 text-xs" style={{ color: '#9FA4DB' }} title="Automático — baseado em posts rejeitados">⚡</span>
+                      )}
+                    </p>
                     <p className="text-xs mt-0.5" style={{
                       color: e.role === 'designer' ? '#2dd4bf' : 'var(--text-dim)',
                       fontSize: '0.6rem',
                     }}>
-                      {e.role === 'designer' ? 'Designer' : 'Social Media'}
+                      {e.key === 'alteracoes' ? 'Automático' : e.role === 'designer' ? 'Designer' : 'Social Media'}
                     </p>
                   </th>
                 ))}
@@ -407,20 +412,34 @@ export default function PipelineView({
                         <td key={e.key} className="px-2 py-2 text-center border-r"
                           style={{ borderColor: 'var(--border)' }}>
                           <div className="flex flex-col items-center gap-1">
-                            <button
-                              onClick={() => toggleStatus(client.id, e.key)}
-                              disabled={!canEdit || isSaving}
-                              title={`${cfg.label} — clica para avançar`}
-                              className="w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold transition-all disabled:opacity-50"
-                              style={{
-                                background: cfg.bg,
-                                border: `1.5px solid ${st === 'pendente' ? 'var(--border)' : cfg.color + '60'}`,
-                                color: cfg.color,
-                                cursor: canEdit ? 'pointer' : 'default',
-                              }}>
-                              {isSaving ? '·' : cfg.icon}
-                            </button>
-                            {record?.notas && (
+                            {e.key === 'alteracoes' ? (
+                              // Alterações — célula automática, não clicável
+                              <div
+                                title={record?.notas ?? 'Auto: sem alterações pendentes'}
+                                className="w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold"
+                                style={{
+                                  background: cfg.bg,
+                                  border: `1.5px solid ${cfg.color}60`,
+                                  color: cfg.color,
+                                }}>
+                                {isSaving ? '·' : cfg.icon}
+                              </div>
+                            ) : (
+                              <button
+                                onClick={() => toggleStatus(client.id, e.key)}
+                                disabled={!canEdit || isSaving}
+                                title={`${cfg.label} — clica para avançar`}
+                                className="w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold transition-all disabled:opacity-50"
+                                style={{
+                                  background: cfg.bg,
+                                  border: `1.5px solid ${st === 'pendente' ? 'var(--border)' : cfg.color + '60'}`,
+                                  color: cfg.color,
+                                  cursor: canEdit ? 'pointer' : 'default',
+                                }}>
+                                {isSaving ? '·' : cfg.icon}
+                              </button>
+                            )}
+                            {record?.notas && e.key !== 'alteracoes' && (
                               <span className="w-1.5 h-1.5 rounded-full" style={{ background: '#fbbf24' }}
                                 title={record.notas} />
                             )}
