@@ -89,16 +89,39 @@ function PostModal({ post, clients, profiles, onClose, onSave, userRole }: {
     setUploading(true)
     const newFiles: PostFile[] = []
 
+    // Pede assinatura ao servidor (mantém o API secret seguro)
+    let signData: any = null
+    try {
+      const signRes = await fetch('/api/upload/sign', { method: 'POST' })
+      if (!signRes.ok) throw new Error('auth')
+      signData = await signRes.json()
+    } catch {
+      alert('Erro ao autenticar upload. Tenta novamente.')
+      setUploading(false)
+      return
+    }
+
+    const { signature, timestamp, folder, cloud_name, api_key } = signData
+
     for (const file of picked) {
       try {
         const form = new FormData()
         form.append('file', file)
-        const res = await fetch('/api/upload', { method: 'POST', body: form })
+        form.append('signature', signature)
+        form.append('timestamp', String(timestamp))
+        form.append('folder', folder)
+        form.append('api_key', api_key)
+
+        // Upload direto browser → Cloudinary (sem passar pelo servidor)
+        const res = await fetch(
+          `https://api.cloudinary.com/v1_1/${cloud_name}/auto/upload`,
+          { method: 'POST', body: form }
+        )
         const data = await res.json()
-        if (res.ok) {
-          newFiles.push({ name: file.name, url: data.url, type: file.type, size: file.size })
+        if (res.ok && data.secure_url) {
+          newFiles.push({ name: file.name, url: data.secure_url, type: file.type, size: file.size })
         } else {
-          alert(`Erro ao enviar ${file.name}: ${data.error ?? 'tente novamente'}`)
+          alert(`Erro ao enviar ${file.name}: ${data.error?.message ?? 'tente novamente'}`)
         }
       } catch (err: any) {
         alert(`Erro ao enviar ${file.name}: ${err?.message ?? 'erro de ligação'}`)
