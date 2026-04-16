@@ -36,6 +36,7 @@ function fmtSize(bytes: number) {
 
 function isImage(type: string) { return type.startsWith('image/') }
 function isVideo(type: string) { return type.startsWith('video/') }
+function isLink(type: string)  { return type.startsWith('link/') }
 
 // ── Lightbox ──────────────────────────────────────────────────────────────────
 function Lightbox({ url, onClose }: { url: string; onClose: () => void }) {
@@ -64,7 +65,8 @@ function FileGrid({ files }: { files: PostFile[] }) {
   const [lightbox, setLightbox] = useState<string | null>(null)
   const imgs   = files.filter(f => isImage(f.type))
   const vids   = files.filter(f => isVideo(f.type))
-  const others = files.filter(f => !isImage(f.type) && !isVideo(f.type))
+  const links  = files.filter(f => isLink(f.type))
+  const others = files.filter(f => !isImage(f.type) && !isVideo(f.type) && !isLink(f.type))
 
   if (!files.length) return null
 
@@ -104,6 +106,32 @@ function FileGrid({ files }: { files: PostFile[] }) {
           <span className="text-xs shrink-0 px-2.5 py-1 rounded-full font-semibold"
             style={{ background: '#6c63ff20', color: '#a78bfa' }}>Abrir ↗</span>
         </a>
+      ))}
+
+      {/* Links embeds (Google Drive, YouTube, Vimeo) */}
+      {links.map((f, i) => (
+        <div key={i} className="rounded-xl overflow-hidden"
+          style={{ border: '1px solid #2a2a35' }}>
+          <iframe
+            src={f.url}
+            allow="autoplay"
+            allowFullScreen
+            className="w-full"
+            style={{ height: '280px', border: 'none', background: '#111116' }}
+          />
+          <div className="flex items-center gap-2 px-3.5 py-2.5"
+            style={{ background: '#111116' }}>
+            <span className="text-lg shrink-0">
+              {f.type === 'link/drive' ? '🎬' : f.type === 'link/youtube' ? '▶️' : '🎞️'}
+            </span>
+            <p className="text-sm font-medium truncate flex-1 text-white">{f.name}</p>
+            <a href={f.url} target="_blank" rel="noreferrer"
+              className="text-xs shrink-0 px-2.5 py-1 rounded-full font-semibold"
+              style={{ background: '#6c63ff20', color: '#a78bfa' }}>
+              Abrir ↗
+            </a>
+          </div>
+        </div>
       ))}
 
       {/* Outros arquivos */}
