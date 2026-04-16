@@ -105,6 +105,14 @@ function PostModal({ post, clients, profiles, onClose, onSave, userRole }: {
     const { signature, timestamp, folder, cloud_name, api_key } = signData
 
     for (const file of picked) {
+      const isVideo = file.type.startsWith('video/')
+      const maxBytes = isVideo ? 100 * 1024 * 1024 : 20 * 1024 * 1024
+      if (file.size > maxBytes) {
+        const maxLabel = isVideo ? '100MB' : '20MB'
+        const sizeMB = (file.size / 1024 / 1024).toFixed(1)
+        alert(`"${file.name}" tem ${sizeMB}MB e excede o limite de ${maxLabel}.\n\nPara vídeos maiores usa o campo "Link de entrega" (Google Drive, Vimeo, etc).`)
+        continue
+      }
       await new Promise<void>((resolve) => {
         const form = new FormData()
         form.append('file', file)
