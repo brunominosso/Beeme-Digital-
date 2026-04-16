@@ -15,11 +15,10 @@ type Etapa = {
 
 const ETAPAS: Etapa[] = [
   { key: 'planejamento', label: 'Planejamento de Conteúdos', short: 'Planej.',   role: 'social_media', auto: true },
-  { key: 'alteracoes',   label: 'Alterações',                short: 'Altera.',   role: 'social_media', auto: true },
   { key: 'captacao',     label: 'Captação Audiovisual',      short: 'Captação',  role: 'social_media', auto: true },
   { key: 'edicao',       label: 'Edição Material',           short: 'Edição',    role: 'designer',     auto: true },
   { key: 'design',       label: 'Design Cards',              short: 'Design',    role: 'designer',     auto: true },
-  { key: 'revisao',      label: 'Aprovação do Cliente',      short: 'Aprovação', role: 'social_media', auto: true },
+  { key: 'aprovacao',    label: 'Aprovação do Cliente',      short: 'Aprovação', role: 'social_media', auto: true },
   { key: 'agendamento',  label: 'Agendamento',               short: 'Agenda.',   role: 'social_media', auto: true },
 ]
 

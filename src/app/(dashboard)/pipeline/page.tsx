@@ -9,7 +9,6 @@ const PAUTA_ETAPA: Record<string, string> = {
   captacao:      'captacao',
   edicao_video:  'edicao',
   edicao_cards:  'design',
-  aprovacao:     'revisao',
   agendamento:   'agendamento',
 }
 
@@ -35,7 +34,7 @@ export default async function PipelinePage() {
     { data: rawProducao },
     { data: rawPautas },
     { data: rawPosts },
-    { data: rawAjustePosts }, // posts em design_ajuste (qualquer data — alterações são do ciclo atual)
+    { data: rawClientPosts }, // posts em design_ajuste ou cliente_aprovacao (ciclo atual, sem filtro de data)
   ] = await Promise.all([
     supabase.from('profiles').select('id, name, role, avatar_color')
       .in('role', ['social_media', 'designer', 'admin', 'gestor']),
@@ -46,9 +45,9 @@ export default async function PipelinePage() {
       .gte('data', refStart).lte('data', refEnd),
     supabase.from('posts').select('client_id, status, publish_date')
       .gte('publish_date', refStart).lte('publish_date', refEnd),
-    // Posts em ajuste — sem filtro de data para capturar ciclo atual
+    // Posts aguardando cliente ou em ajuste — sem filtro de data
     supabase.from('posts').select('client_id, status')
-      .eq('status', 'design_ajuste'),
+      .in('status', ['design_ajuste', 'cliente_aprovacao']),
   ])
 
   const teamIds = (rawProfiles ?? [])
@@ -59,11 +58,16 @@ export default async function PipelinePage() {
     (c.responsible_ids ?? []).some((id: string) => teamIds.includes(id))
   )
 
-  // ── Contagem de posts em ajuste por cliente ──────────────
-  const ajusteCount: Record<string, number> = {}
-  for (const post of (rawAjustePosts ?? []) as any[]) {
+  // ── Posts pendentes de cliente por tipo ──────────────────
+  const ajusteByClient: Record<string, number> = {}    // design_ajuste
+  const aguardandoByClient: Record<string, number> = {} // cliente_aprovacao
+  for (const post of (rawClientPosts ?? []) as any[]) {
     if (!post.client_id) continue
-    ajusteCount[post.client_id] = (ajusteCount[post.client_id] ?? 0) + 1
+    if (post.status === 'design_ajuste') {
+      ajusteByClient[post.client_id] = (ajusteByClient[post.client_id] ?? 0) + 1
+    } else if (post.status === 'cliente_aprovacao') {
+      aguardandoByClient[post.client_id] = (aguardandoByClient[post.client_id] ?? 0) + 1
+    }
   }
 
   // ── Posts por cliente (mês de referência) ────────────────
@@ -101,34 +105,10 @@ export default async function PipelinePage() {
     }
   }
 
-  // 3. Alterações — semáforo baseado em posts em design_ajuste (workload do designer)
+  // 3. Aprovação — ciclo completo com o cliente
   for (const client of clients as any[]) {
-    const count = ajusteCount[client.id] ?? 0
-    let status: string
-    let notas: string
-
-    if (count === 0) {
-      status = 'concluido'
-      notas = 'Auto: sem alterações pendentes'
-    } else if (count <= 2) {
-      status = 'em_andamento'
-      notas = `Auto: ${count} post${count > 1 ? 's' : ''} em ajuste pelo designer`
-    } else {
-      status = 'bloqueado'
-      notas = `Auto: ${count} posts em ajuste — atenção necessária`
-    }
-
-    autoUpserts.push({
-      client_id: client.id, mes: refMonthStr, etapa: 'alteracoes',
-      status, notas,
-    })
-  }
-
-  // 4. Revisão — estado de aprovação do cliente
-  // Inicia sempre como verde. Fica amarelo quando cliente pede alteração no link de aprovação.
-  // Volta ao verde quando todos os posts são aprovados.
-  for (const client of clients as any[]) {
-    const ajustes = ajusteCount[client.id] ?? 0
+    const ajustes    = ajusteByClient[client.id] ?? 0
+    const aguardando = aguardandoByClient[client.id] ?? 0
     const clientPosts = postsByClient[client.id] ?? []
     const allApproved = clientPosts.length > 0 &&
       clientPosts.every((p: any) => p.status === 'sm_aprovado' || p.status === 'sm_postado')
@@ -137,20 +117,25 @@ export default async function PipelinePage() {
     let notas: string
 
     if (ajustes > 0) {
-      // Cliente pediu alteração(ões) — alerta
-      status = 'em_andamento'
+      // Cliente pediu alteração — bloqueado
+      status = 'bloqueado'
       notas = `Auto: cliente pediu alteração em ${ajustes} material${ajustes > 1 ? 'is' : ''}`
+    } else if (aguardando > 0) {
+      // Posts enviados ao cliente, aguardando resposta
+      status = 'em_andamento'
+      notas = `Auto: ${aguardando} material${aguardando > 1 ? 'is' : ''} aguardando aprovação do cliente`
     } else if (allApproved) {
+      // Tudo aprovado
       status = 'concluido'
       notas = 'Auto: todos os materiais aprovados pelo cliente'
     } else {
-      // Nenhum ajuste pendente e ainda não totalmente aprovado — verde por omissão
-      status = 'concluido'
-      notas = 'Auto: sem pedidos de alteração'
+      // Ainda não chegou ao cliente
+      status = 'pendente'
+      notas = 'Auto: materiais ainda não enviados para aprovação'
     }
 
     autoUpserts.push({
-      client_id: client.id, mes: refMonthStr, etapa: 'revisao',
+      client_id: client.id, mes: refMonthStr, etapa: 'aprovacao',
       status, notas,
     })
   }

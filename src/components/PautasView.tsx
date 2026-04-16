@@ -10,7 +10,6 @@ const PAUTA_TO_PIPELINE: Record<string, string> = {
   captacao:      'captacao',
   edicao_video:  'edicao',
   edicao_cards:  'design',
-  aprovacao:     'revisao',
   agendamento:   'agendamento',
 }
 
@@ -85,14 +84,12 @@ function formatWeekRange(days: Date[]): string {
 
 // Etapas do pipeline com o tipo de pauta correspondente para criar
 // auto: true → gerido automaticamente, não aparece no banner de pendências
-const PIPELINE_ETAPAS: { key: string; label: string; pautaTipo: string; dot: string; auto?: boolean }[] = [
-  { key: 'planejamento', label: 'Planejamento',  pautaTipo: 'planejamento',  dot: '#9FA4DB' },
-  { key: 'alteracoes',   label: 'Alterações',    pautaTipo: 'roteiro',       dot: '#60a5fa', auto: true },
-  { key: 'captacao',     label: 'Captação',       pautaTipo: 'captacao',      dot: '#fb923c' },
-  { key: 'edicao',       label: 'Edição',         pautaTipo: 'edicao_video',  dot: '#e879f9' },
-  { key: 'design',       label: 'Design',          pautaTipo: 'edicao_cards',  dot: '#2dd4bf' },
-  { key: 'revisao',      label: 'Revisão',         pautaTipo: 'aprovacao',     dot: '#f47272' },
-  { key: 'agendamento',  label: 'Agendamento',    pautaTipo: 'agendamento',   dot: '#fbbf24' },
+const PIPELINE_ETAPAS: { key: string; label: string; pautaTipo: string; dot: string }[] = [
+  { key: 'planejamento', label: 'Planejamento', pautaTipo: 'planejamento', dot: '#9FA4DB' },
+  { key: 'captacao',     label: 'Captação',      pautaTipo: 'captacao',     dot: '#fb923c' },
+  { key: 'edicao',       label: 'Edição',        pautaTipo: 'edicao_video', dot: '#e879f9' },
+  { key: 'design',       label: 'Design',         pautaTipo: 'edicao_cards', dot: '#2dd4bf' },
+  { key: 'agendamento',  label: 'Agendamento',   pautaTipo: 'agendamento',  dot: '#fbbf24' },
 ]
 
 interface Props {
