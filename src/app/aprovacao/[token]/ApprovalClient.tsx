@@ -109,30 +109,33 @@ function FileGrid({ files }: { files: PostFile[] }) {
       ))}
 
       {/* Links embeds (Google Drive, YouTube, Vimeo) */}
-      {links.map((f, i) => (
-        <div key={i} className="rounded-xl overflow-hidden"
-          style={{ border: '1px solid #2a2a35' }}>
-          <iframe
-            src={f.url}
-            allow="autoplay"
-            allowFullScreen
-            className="w-full"
-            style={{ height: '280px', border: 'none', background: '#111116' }}
-          />
-          <div className="flex items-center gap-2 px-3.5 py-2.5"
-            style={{ background: '#111116' }}>
-            <span className="text-lg shrink-0">
-              {f.type === 'link/drive' ? '🎬' : f.type === 'link/youtube' ? '▶️' : '🎞️'}
-            </span>
-            <p className="text-sm font-medium truncate flex-1 text-white">{f.name}</p>
-            <a href={f.url} target="_blank" rel="noreferrer"
-              className="text-xs shrink-0 px-2.5 py-1 rounded-full font-semibold"
-              style={{ background: '#6c63ff20', color: '#a78bfa' }}>
-              Abrir ↗
-            </a>
+      {links.map((f, i) => {
+        const viewUrl = f.url.replace('/preview', '/view')
+        return (
+          <div key={i} className="rounded-xl overflow-hidden"
+            style={{ border: '1px solid #2a2a35' }}>
+            <iframe
+              src={f.url}
+              allow="autoplay; fullscreen"
+              allowFullScreen
+              className="w-full"
+              style={{ height: '280px', border: 'none', background: '#111116' }}
+            />
+            <div className="flex items-center gap-2 px-3.5 py-2.5"
+              style={{ background: '#111116' }}>
+              <span className="text-lg shrink-0">
+                {f.type === 'link/drive' ? '🎬' : f.type === 'link/youtube' ? '▶️' : '🎞️'}
+              </span>
+              <p className="text-sm font-medium truncate flex-1 text-white">{f.name}</p>
+              <a href={viewUrl} target="_blank" rel="noreferrer"
+                className="text-xs shrink-0 px-2.5 py-1 rounded-full font-semibold"
+                style={{ background: '#6c63ff20', color: '#a78bfa' }}>
+                Tela cheia ↗
+              </a>
+            </div>
           </div>
-        </div>
-      ))}
+        )
+      })}
 
       {/* Outros arquivos */}
       {others.map((f, i) => (
