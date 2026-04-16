@@ -71,6 +71,7 @@ function PostModal({ post, clients, profiles, onClose, onSave, userRole }: {
   const [notes,       setNotes]       = useState(post.notes ?? '')
   const [files,       setFiles]       = useState<PostFile[]>((post.files as PostFile[]) ?? [])
   const [uploading,     setUploading]     = useState(false)
+  const [uploadProgress, setUploadProgress] = useState<{name: string, pct: number} | null>(null)
   const [saving,        setSaving]        = useState(false)
   const [caption,       setCaption]       = useState(post.caption ?? '')
   const [cta,           setCta]           = useState(post.cta ?? '')
@@ -104,7 +105,7 @@ function PostModal({ post, clients, profiles, onClose, onSave, userRole }: {
     const { signature, timestamp, folder, cloud_name, api_key } = signData
 
     for (const file of picked) {
-      try {
+      await new Promise<void>((resolve) => {
         const form = new FormData()
         form.append('file', file)
         form.append('signature', signature)
@@ -112,20 +113,38 @@ function PostModal({ post, clients, profiles, onClose, onSave, userRole }: {
         form.append('folder', folder)
         form.append('api_key', api_key)
 
-        // Upload direto browser → Cloudinary (sem passar pelo servidor)
-        const res = await fetch(
-          `https://api.cloudinary.com/v1_1/${cloud_name}/auto/upload`,
-          { method: 'POST', body: form }
-        )
-        const data = await res.json()
-        if (res.ok && data.secure_url) {
-          newFiles.push({ name: file.name, url: data.secure_url, type: file.type, size: file.size })
-        } else {
-          alert(`Erro ao enviar ${file.name}: ${data.error?.message ?? 'tente novamente'}`)
+        const xhr = new XMLHttpRequest()
+        xhr.open('POST', `https://api.cloudinary.com/v1_1/${cloud_name}/auto/upload`)
+
+        xhr.upload.onprogress = (e) => {
+          if (e.lengthComputable) {
+            setUploadProgress({ name: file.name, pct: Math.round((e.loaded / e.total) * 100) })
+          }
         }
-      } catch (err: any) {
-        alert(`Erro ao enviar ${file.name}: ${err?.message ?? 'erro de ligação'}`)
-      }
+
+        xhr.onload = () => {
+          setUploadProgress(null)
+          try {
+            const data = JSON.parse(xhr.responseText)
+            if (xhr.status === 200 && data.secure_url) {
+              newFiles.push({ name: file.name, url: data.secure_url, type: file.type, size: file.size })
+            } else {
+              alert(`Erro ao enviar ${file.name}: ${data.error?.message ?? 'tente novamente'}`)
+            }
+          } catch {
+            alert(`Erro ao enviar ${file.name}: resposta inválida`)
+          }
+          resolve()
+        }
+
+        xhr.onerror = () => {
+          setUploadProgress(null)
+          alert(`Erro ao enviar ${file.name}: falha de ligação`)
+          resolve()
+        }
+
+        xhr.send(form)
+      })
     }
 
     setFiles(prev => [...prev, ...newFiles])
@@ -370,7 +389,9 @@ function PostModal({ post, clients, profiles, onClose, onSave, userRole }: {
                 disabled={uploading}
                 className="text-xs px-3 py-1.5 rounded-lg font-medium disabled:opacity-50 flex items-center gap-1.5"
                 style={{ background: 'var(--surface-2)', color: 'var(--lavanda-light)', border: '1px solid var(--border)' }}>
-                {uploading ? '⏳ A carregar...' : '⬆ Carregar ficheiro'}
+                {uploadProgress
+                  ? `⏳ ${uploadProgress.name.slice(0, 16)}… ${uploadProgress.pct}%`
+                  : uploading ? '⏳ A preparar...' : '⬆ Carregar ficheiro'}
               </button>
               <input ref={fileInputRef} type="file" multiple accept="image/*,video/*" className="hidden" onChange={handleFileUpload} />
             </div>
