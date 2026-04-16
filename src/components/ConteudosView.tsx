@@ -88,18 +88,38 @@ function PostModal({ post, clients, profiles, onClose, onSave, userRole }: {
     if (!picked.length) return
     setUploading(true)
     const newFiles: PostFile[] = []
+
+    // Obtém assinatura do servidor (evita expor o API secret no cliente)
+    const signRes = await fetch('/api/upload/sign', { method: 'POST' })
+    if (!signRes.ok) { alert('Erro ao iniciar upload. Tente novamente.'); setUploading(false); return }
+    const { signature, timestamp, folder, cloud_name, api_key } = await signRes.json()
+
     for (const file of picked) {
-      const form = new FormData()
-      form.append('file', file)
-      const res = await fetch('/api/upload', { method: 'POST', body: form })
-      if (res.ok) {
-        const data = await res.json()
-        newFiles.push({ name: data.name, url: data.url, type: data.type, size: data.size })
-      } else {
-        const err = await res.json()
-        alert(err.error ?? `Erro ao enviar ${file.name}`)
+      try {
+        const form = new FormData()
+        form.append('file', file)
+        form.append('signature', signature)
+        form.append('timestamp', String(timestamp))
+        form.append('folder', folder)
+        form.append('api_key', api_key)
+
+        // Upload direto para o Cloudinary — sem passar pelo servidor Next.js
+        const res = await fetch(
+          `https://api.cloudinary.com/v1_1/${cloud_name}/auto/upload`,
+          { method: 'POST', body: form }
+        )
+        if (res.ok) {
+          const data = await res.json()
+          newFiles.push({ name: file.name, url: data.secure_url, type: file.type, size: file.size })
+        } else {
+          const err = await res.json()
+          alert(`Erro ao enviar ${file.name}: ${err.error?.message ?? 'tente novamente'}`)
+        }
+      } catch {
+        alert(`Erro ao enviar ${file.name}. Verifica a ligação e tenta novamente.`)
       }
     }
+
     setFiles(prev => [...prev, ...newFiles])
     setUploading(false)
     if (fileInputRef.current) fileInputRef.current.value = ''
