@@ -10,8 +10,36 @@ type PostFile = { name: string; url: string; type: string; size: number }
 
 function isImage(type: string) { return type.startsWith('image/') }
 function isVideo(type: string) { return type.startsWith('video/') }
-function fileIcon(type: string) { return isVideo(type) ? '🎬' : isImage(type) ? '🖼️' : '📎' }
-function fmtSize(bytes: number) { return bytes > 1_000_000 ? `${(bytes / 1_000_000).toFixed(1)} MB` : `${Math.round(bytes / 1000)} KB` }
+function isLink(type: string)  { return type.startsWith('link/') }
+function fileIcon(type: string) { return isVideo(type) ? '🎬' : isImage(type) ? '🖼️' : isLink(type) ? '🔗' : '📎' }
+function fmtSize(bytes: number) { return bytes > 1_000_000 ? `${(bytes / 1_000_000).toFixed(1)} MB` : bytes > 0 ? `${Math.round(bytes / 1000)} KB` : '' }
+
+function parseLinkUrl(raw: string): { type: string; embedUrl: string; label: string } | null {
+  try {
+    const url = new URL(raw.trim())
+    // Google Drive: /file/d/FILE_ID/view ou /file/d/FILE_ID/edit
+    const driveMatch = url.pathname.match(/\/file\/d\/([^/]+)/)
+    if (url.hostname.includes('drive.google.com') && driveMatch) {
+      return { type: 'link/drive', embedUrl: `https://drive.google.com/file/d/${driveMatch[1]}/preview`, label: 'Google Drive' }
+    }
+    // YouTube: watch?v=ID ou youtu.be/ID
+    if (url.hostname.includes('youtube.com') && url.searchParams.get('v')) {
+      return { type: 'link/youtube', embedUrl: `https://www.youtube.com/embed/${url.searchParams.get('v')}`, label: 'YouTube' }
+    }
+    if (url.hostname === 'youtu.be') {
+      const id = url.pathname.slice(1)
+      return { type: 'link/youtube', embedUrl: `https://www.youtube.com/embed/${id}`, label: 'YouTube' }
+    }
+    // Vimeo
+    const vimeoMatch = url.pathname.match(/\/(\d+)/)
+    if (url.hostname.includes('vimeo.com') && vimeoMatch) {
+      return { type: 'link/vimeo', embedUrl: `https://player.vimeo.com/video/${vimeoMatch[1]}`, label: 'Vimeo' }
+    }
+    return null
+  } catch {
+    return null
+  }
+}
 
 // ─── constantes ───────────────────────────────────────────────────────────────
 
@@ -72,6 +100,8 @@ function PostModal({ post, clients, profiles, onClose, onSave, userRole }: {
   const [files,       setFiles]       = useState<PostFile[]>((post.files as PostFile[]) ?? [])
   const [uploading,     setUploading]     = useState(false)
   const [uploadProgress, setUploadProgress] = useState<{name: string, pct: number} | null>(null)
+  const [showLinkInput, setShowLinkInput] = useState(false)
+  const [linkInput,     setLinkInput]     = useState('')
   const [saving,        setSaving]        = useState(false)
   const [caption,       setCaption]       = useState(post.caption ?? '')
   const [cta,           setCta]           = useState(post.cta ?? '')
@@ -457,18 +487,69 @@ function PostModal({ post, clients, profiles, onClose, onSave, userRole }: {
           <div>
             <div className="flex items-center justify-between mb-2">
               <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Ficheiros ({files.length})</p>
-              <button onClick={() => fileInputRef.current?.click()}
-                disabled={uploading}
-                className="text-xs px-3 py-1.5 rounded-lg font-medium disabled:opacity-50 flex items-center gap-1.5"
-                style={{ background: 'var(--surface-2)', color: 'var(--lavanda-light)', border: '1px solid var(--border)' }}>
-                {uploadProgress
-                  ? `⏳ ${uploadProgress.name.slice(0, 16)}… ${uploadProgress.pct}%`
-                  : uploading ? '⏳ A preparar...' : '⬆ Carregar ficheiro'}
-              </button>
+              <div className="flex items-center gap-1.5">
+                <button onClick={() => { setShowLinkInput(v => !v); setLinkInput('') }}
+                  className="text-xs px-2.5 py-1.5 rounded-lg font-medium"
+                  style={{ background: 'var(--surface-2)', color: 'var(--text-muted)', border: '1px solid var(--border)' }}
+                  title="Adicionar link do Drive, YouTube ou Vimeo">
+                  🔗 Link
+                </button>
+                <button onClick={() => fileInputRef.current?.click()}
+                  disabled={uploading}
+                  className="text-xs px-2.5 py-1.5 rounded-lg font-medium disabled:opacity-50"
+                  style={{ background: 'var(--surface-2)', color: 'var(--lavanda-light)', border: '1px solid var(--border)' }}>
+                  {uploadProgress
+                    ? `⏳ ${uploadProgress.name.slice(0, 14)}… ${uploadProgress.pct}%`
+                    : uploading ? '⏳ A preparar...' : '⬆ Ficheiro'}
+                </button>
+              </div>
               <input ref={fileInputRef} type="file" multiple accept="image/*,video/*" className="hidden" onChange={handleFileUpload} />
             </div>
 
-            {files.length === 0 ? (
+            {/* Input de link */}
+            {showLinkInput && (
+              <div className="flex gap-2 mb-2">
+                <input
+                  type="url"
+                  value={linkInput}
+                  onChange={e => setLinkInput(e.target.value)}
+                  className="flex-1 px-3 py-1.5 rounded-lg text-sm outline-none"
+                  style={{ ...inp, fontSize: '12px' }}
+                  placeholder="Cole o link do Drive, YouTube ou Vimeo..."
+                  autoFocus
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') {
+                      const parsed = parseLinkUrl(linkInput)
+                      if (parsed) {
+                        setFiles(prev => [...prev, { name: parsed.label, url: parsed.embedUrl, type: parsed.type, size: 0 }])
+                        setLinkInput('')
+                        setShowLinkInput(false)
+                      } else {
+                        alert('Link não reconhecido. Usa links do Google Drive, YouTube ou Vimeo.')
+                      }
+                    }
+                    if (e.key === 'Escape') { setShowLinkInput(false); setLinkInput('') }
+                  }}
+                />
+                <button
+                  onClick={() => {
+                    const parsed = parseLinkUrl(linkInput)
+                    if (parsed) {
+                      setFiles(prev => [...prev, { name: parsed.label, url: parsed.embedUrl, type: parsed.type, size: 0 }])
+                      setLinkInput('')
+                      setShowLinkInput(false)
+                    } else {
+                      alert('Link não reconhecido. Usa links do Google Drive, YouTube ou Vimeo.')
+                    }
+                  }}
+                  className="text-xs px-3 py-1.5 rounded-lg font-medium"
+                  style={{ background: 'var(--accent)', color: '#fff' }}>
+                  Adicionar
+                </button>
+              </div>
+            )}
+
+            {files.length === 0 && !showLinkInput ? (
               <button onClick={() => fileInputRef.current?.click()}
                 className="w-full py-6 rounded-xl border-2 border-dashed text-sm flex flex-col items-center gap-2 hover:opacity-80 transition-opacity"
                 style={{ borderColor: 'var(--border)', color: 'var(--text-muted)' }}>
@@ -476,35 +557,63 @@ function PostModal({ post, clients, profiles, onClose, onSave, userRole }: {
                 Arrasta fotos ou vídeos, ou clica para carregar
               </button>
             ) : (
-              <div className="space-y-1.5">
+              <div className="space-y-2">
                 {files.map((f, i) => (
-                  <div key={i} className="flex items-center gap-3 px-3 py-2 rounded-lg"
-                    style={{ background: 'var(--surface-2)' }}>
-                    {isImage(f.type) ? (
-                      <img src={f.url} alt={f.name} className="w-10 h-10 rounded-lg object-cover shrink-0" />
+                  <div key={i}>
+                    {isLink(f.type) ? (
+                      <div className="rounded-xl overflow-hidden" style={{ border: '1px solid var(--border)' }}>
+                        <iframe
+                          src={f.url}
+                          className="w-full"
+                          style={{ height: '220px', border: 'none', display: 'block' }}
+                          allow="autoplay; fullscreen"
+                          allowFullScreen
+                        />
+                        <div className="flex items-center justify-between px-3 py-2" style={{ background: 'var(--surface-2)' }}>
+                          <span className="text-xs flex items-center gap-1.5" style={{ color: 'var(--text-muted)' }}>
+                            {fileIcon(f.type)} {f.name}
+                          </span>
+                          <div className="flex items-center gap-2">
+                            <a href={f.url} target="_blank" rel="noreferrer"
+                              className="text-xs" style={{ color: 'var(--lavanda-light)' }}>
+                              Abrir
+                            </a>
+                            <button onClick={() => removeFile(i)} className="text-xs" style={{ color: 'var(--text-muted)' }}>✕</button>
+                          </div>
+                        </div>
+                      </div>
                     ) : (
-                      <div className="w-10 h-10 rounded-lg flex items-center justify-center text-xl shrink-0"
-                        style={{ background: 'var(--surface)' }}>
-                        {fileIcon(f.type)}
+                      <div className="flex items-center gap-3 px-3 py-2 rounded-lg"
+                        style={{ background: 'var(--surface-2)' }}>
+                        {isImage(f.type) ? (
+                          <img src={f.url} alt={f.name} className="w-10 h-10 rounded-lg object-cover shrink-0" />
+                        ) : (
+                          <div className="w-10 h-10 rounded-lg flex items-center justify-center text-xl shrink-0"
+                            style={{ background: 'var(--surface)' }}>
+                            {fileIcon(f.type)}
+                          </div>
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm truncate font-medium" style={{ color: 'var(--cream)' }}>{f.name}</p>
+                          <p className="text-xs" style={{ color: 'var(--text-muted)' }}>{fmtSize(f.size)}</p>
+                        </div>
+                        <a href={f.url} target="_blank" rel="noreferrer"
+                          className="text-xs px-2 py-1 rounded shrink-0"
+                          style={{ color: 'var(--lavanda-light)' }}>
+                          Ver
+                        </a>
+                        <button onClick={() => removeFile(i)} className="text-xs shrink-0"
+                          style={{ color: 'var(--text-muted)' }}>✕</button>
                       </div>
                     )}
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm truncate font-medium" style={{ color: 'var(--cream)' }}>{f.name}</p>
-                      <p className="text-xs" style={{ color: 'var(--text-muted)' }}>{fmtSize(f.size)}</p>
-                    </div>
-                    <a href={f.url} target="_blank" rel="noreferrer"
-                      className="text-xs px-2 py-1 rounded shrink-0"
-                      style={{ color: 'var(--lavanda-light)' }}>
-                      Ver
-                    </a>
-                    <button onClick={() => removeFile(i)} className="text-xs shrink-0"
-                      style={{ color: 'var(--text-muted)' }}>✕</button>
                   </div>
                 ))}
-                <button onClick={() => fileInputRef.current?.click()}
-                  className="text-xs mt-1" style={{ color: 'var(--lavanda-light)' }}>
-                  + Adicionar mais
-                </button>
+                {!showLinkInput && (
+                  <button onClick={() => fileInputRef.current?.click()}
+                    className="text-xs mt-1" style={{ color: 'var(--lavanda-light)' }}>
+                    + Adicionar mais
+                  </button>
+                )}
               </div>
             )}
           </div>
