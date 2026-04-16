@@ -966,7 +966,7 @@ function KanbanView({ posts: initialPosts, clients, profiles, onEdit, userRole }
   // ── Quadro de role (SM / Designer) ──────────────────────────────────────────
   if (roleCols) {
     return (
-      <div className="flex gap-4 overflow-x-auto pb-4">
+      <div className="flex gap-4 overflow-x-auto pb-2" style={{ height: 'calc(100vh - 180px)' }}>
         {roleCols.map(col => {
           const colPosts = posts.filter(p => col.displayStatuses.includes(p.status))
           const isOver   = dragOver === col.key
@@ -994,17 +994,17 @@ function KanbanView({ posts: initialPosts, clients, profiles, onEdit, userRole }
           }
 
           return (
-            <div key={col.key} className="shrink-0 w-64 flex flex-col rounded-xl transition-all"
-              style={{ background: isOver ? col.color + '08' : 'transparent', border: `1px solid ${isOver ? col.color : 'transparent'}`, minHeight: '120px' }}
+            <div key={col.key} className="shrink-0 w-64 flex flex-col rounded-xl transition-all h-full"
+              style={{ background: isOver ? col.color + '08' : 'transparent', border: `1px solid ${isOver ? col.color : 'transparent'}` }}
               onDragOver={e => { e.preventDefault(); setDragOver(col.key) }}
               onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragOver(null) }}
               onDrop={e => { e.preventDefault(); if (dragging) movePost(dragging, col.dropStatus); setDragging(null); setDragOver(null) }}>
-              <div className="flex items-center gap-2 px-1 py-2 mb-1">
+              <div className="flex items-center gap-2 px-1 py-2 mb-1 shrink-0">
                 <div className="w-2.5 h-2.5 rounded-full" style={{ background: col.color }} />
                 <span className="text-xs font-semibold" style={{ color: col.color }}>{col.label}</span>
                 <span className="text-xs ml-auto px-1.5 py-0.5 rounded-full" style={{ background: col.color + '20', color: col.color }}>{colPosts.length}</span>
               </div>
-              <div className="space-y-2 flex-1 p-1">
+              <div className="space-y-2 flex-1 min-h-0 overflow-y-auto p-1">
                 {colPosts.map(p => (
                   <div key={p.id}
                     draggable={!col.lockCards}
@@ -1028,23 +1028,23 @@ function KanbanView({ posts: initialPosts, clients, profiles, onEdit, userRole }
 
   // ── Quadro admin/editor (colunas originais) ──────────────────────────────────
   return (
-    <div className="flex gap-4 overflow-x-auto pb-4">
+    <div className="flex gap-4 overflow-x-auto pb-2" style={{ height: 'calc(100vh - 180px)' }}>
       {STATUSES.map(col => {
         const colPosts = posts.filter(p => p.status === col.key)
         const isOver = dragOver === col.key
         return (
-          <div key={col.key} className="shrink-0 w-64 flex flex-col rounded-xl transition-all"
-            style={{ background: isOver ? col.color + '08' : 'transparent', border: `1px solid ${isOver ? col.color : 'transparent'}`, minHeight: '120px' }}
+          <div key={col.key} className="shrink-0 w-64 flex flex-col rounded-xl transition-all h-full"
+            style={{ background: isOver ? col.color + '08' : 'transparent', border: `1px solid ${isOver ? col.color : 'transparent'}` }}
             onDragOver={e => { e.preventDefault(); setDragOver(col.key) }}
             onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragOver(null) }}
             onDrop={e => { e.preventDefault(); if (dragging) movePost(dragging, col.key); setDragging(null); setDragOver(null) }}>
-            <div className="flex items-center gap-2 px-1 py-2 mb-1">
+            <div className="flex items-center gap-2 px-1 py-2 mb-1 shrink-0">
               <div className="w-2.5 h-2.5 rounded-full" style={{ background: col.color }} />
               <span className="text-xs font-semibold" style={{ color: col.color }}>{col.label}</span>
               <span className="text-xs ml-auto px-1.5 py-0.5 rounded-full"
                 style={{ background: col.color + '20', color: col.color }}>{colPosts.length}</span>
             </div>
-            <div className="space-y-2 flex-1 p-1">
+            <div className="space-y-2 flex-1 min-h-0 overflow-y-auto p-1">
               {colPosts.map(p => (
                 <div key={p.id} draggable
                   onDragStart={() => setDragging(p.id)}
