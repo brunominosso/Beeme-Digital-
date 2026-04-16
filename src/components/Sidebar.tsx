@@ -166,7 +166,7 @@ export default function Sidebar({ user, role, isOpen = false, onClose }: Props) 
         {/* Notifications row */}
         <div className="flex items-center justify-between px-5 py-2" style={{ borderBottom: '1px solid var(--border)' }}>
           <span className="text-xs" style={{ color: 'var(--text-muted)' }}>Notificações</span>
-          <NotificationsPanel />
+          <NotificationsPanel openUp />
         </div>
 
         {/* User */}

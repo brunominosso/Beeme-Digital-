@@ -15,6 +15,8 @@ type Notification = {
 
 const TYPE_ICONS: Record<string, string> = {
   task_assigned:    '📋',
+  post_assigned:    '🎨',
+  post_review:      '👀',
   post_approved:    '✅',
   post_adjustment:  '💬',
   post_due:         '⏰',
@@ -38,7 +40,7 @@ export function createNotification(params: {
   data?: Record<string, unknown>
 }) {
   const supabase = createClient()
-  supabase.from('notifications').insert({
+  ;(supabase.from('notifications') as any).insert({
     user_id: params.userId,
     type: params.type,
     title: params.title,
@@ -47,7 +49,7 @@ export function createNotification(params: {
   }).then(() => {/* fire and forget */})
 }
 
-export default function NotificationsPanel() {
+export default function NotificationsPanel({ openUp = false }: { openUp?: boolean }) {
   const [open, setOpen]               = useState(false)
   const [notifs, setNotifs]           = useState<Notification[]>([])
   const [loading, setLoading]         = useState(false)
@@ -128,7 +130,7 @@ export default function NotificationsPanel() {
 
       {/* Dropdown */}
       {open && (
-        <div className="absolute right-0 top-11 w-80 rounded-xl shadow-2xl z-50 overflow-hidden"
+        <div className={`absolute right-0 w-80 rounded-xl shadow-2xl z-50 overflow-hidden ${openUp ? 'bottom-11' : 'top-11'}`}
           style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
           <div className="flex items-center justify-between px-4 py-3 border-b" style={{ borderColor: 'var(--border)' }}>
             <h3 className="text-sm font-semibold" style={{ color: 'var(--cream)' }}>Notificações</h3>

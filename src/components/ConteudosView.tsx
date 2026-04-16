@@ -3,6 +3,7 @@
 import { useState, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { logActivity } from '@/components/ActivityLogPanel'
+import { createNotification } from '@/components/NotificationsPanel'
 import type { Post, Client, Profile } from '@/types/database'
 
 type PostFile = { name: string; url: string; type: string; size: number }
@@ -696,11 +697,40 @@ function KanbanView({ posts: initialPosts, clients, profiles, onEdit, userRole }
     null
 
   async function movePost(postId: string, newStatus: string) {
-    const oldStatus = posts.find(p => p.id === postId)?.status
+    const post = posts.find(p => p.id === postId)
+    const oldStatus = post?.status
+    if (oldStatus === newStatus) return
     setPosts(prev => prev.map(p => p.id === postId ? { ...p, status: newStatus } : p))
     const supabase = createClient()
     await supabase.from('posts').update({ status: newStatus }).eq('id', postId)
     logActivity({ entityType: 'post', entityId: postId, action: 'status_changed', details: { status_from: oldStatus, status_to: newStatus } })
+
+    const postTitle = (post as any)?.title ?? 'Post'
+    const clientName = clients.find(c => c.id === (post as any)?.client_id)?.name ?? ''
+
+    // Notificar designer quando SM envia para design_fila
+    if (newStatus === 'design_fila') {
+      const designers = profiles.filter((p: any) => p.role === 'designer')
+      designers.forEach((d: any) => createNotification({
+        userId: d.id,
+        type: 'post_assigned',
+        title: `Novo card para produção`,
+        message: `"${postTitle}"${clientName ? ` — ${clientName}` : ''}`,
+        data: { post_id: postId },
+      }))
+    }
+
+    // Notificar Social Media quando designer envia para revisão
+    if (newStatus === 'sm_revisao') {
+      const sms = profiles.filter((p: any) => p.role === 'social_media')
+      sms.forEach((p: any) => createNotification({
+        userId: p.id,
+        type: 'post_review',
+        title: `Card pronto para revisão`,
+        message: `"${postTitle}"${clientName ? ` — ${clientName}` : ''}`,
+        data: { post_id: postId },
+      }))
+    }
   }
 
   // ── Quadro de role (SM / Designer) ──────────────────────────────────────────
