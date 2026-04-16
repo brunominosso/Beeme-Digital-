@@ -103,56 +103,120 @@ function PostModal({ post, clients, profiles, onClose, onSave, userRole }: {
     }
 
     const { signature, timestamp, folder, cloud_name, api_key } = signData
+    const CHUNK_SIZE = 6 * 1024 * 1024 // 6MB por chunk
 
     for (const file of picked) {
       const isVideo = file.type.startsWith('video/')
-      const maxBytes = isVideo ? 100 * 1024 * 1024 : 20 * 1024 * 1024
-      if (file.size > maxBytes) {
-        const maxLabel = isVideo ? '100MB' : '20MB'
-        const sizeMB = (file.size / 1024 / 1024).toFixed(1)
-        alert(`"${file.name}" tem ${sizeMB}MB e excede o limite de ${maxLabel}.\n\nPara vídeos maiores usa o campo "Link de entrega" (Google Drive, Vimeo, etc).`)
-        continue
-      }
-      await new Promise<void>((resolve) => {
-        const form = new FormData()
-        form.append('file', file)
-        form.append('signature', signature)
-        form.append('timestamp', String(timestamp))
-        form.append('folder', folder)
-        form.append('api_key', api_key)
 
-        const xhr = new XMLHttpRequest()
-        xhr.open('POST', `https://api.cloudinary.com/v1_1/${cloud_name}/auto/upload`)
+      if (isVideo && file.size > CHUNK_SIZE) {
+        // Upload em chunks para vídeos grandes
+        const uploadId = `${Date.now()}-${Math.random().toString(36).slice(2)}`
+        const totalChunks = Math.ceil(file.size / CHUNK_SIZE)
+        let secureUrl: string | null = null
+        let failed = false
 
-        xhr.upload.onprogress = (e) => {
-          if (e.lengthComputable) {
-            setUploadProgress({ name: file.name, pct: Math.round((e.loaded / e.total) * 100) })
-          }
-        }
+        for (let i = 0; i < totalChunks; i++) {
+          const start = i * CHUNK_SIZE
+          const end = Math.min(start + CHUNK_SIZE, file.size)
+          const chunk = file.slice(start, end)
 
-        xhr.onload = () => {
-          setUploadProgress(null)
-          try {
-            const data = JSON.parse(xhr.responseText)
-            if (xhr.status === 200 && data.secure_url) {
-              newFiles.push({ name: file.name, url: data.secure_url, type: file.type, size: file.size })
-            } else {
-              alert(`Erro ao enviar ${file.name}: ${data.error?.message ?? 'tente novamente'}`)
+          const form = new FormData()
+          form.append('file', chunk, file.name)
+          form.append('signature', signature)
+          form.append('timestamp', String(timestamp))
+          form.append('folder', folder)
+          form.append('api_key', api_key)
+
+          const result = await new Promise<string | null>((resolve) => {
+            const xhr = new XMLHttpRequest()
+            xhr.open('POST', `https://api.cloudinary.com/v1_1/${cloud_name}/auto/upload`)
+            xhr.setRequestHeader('X-Unique-Upload-Id', uploadId)
+            xhr.setRequestHeader('Content-Range', `bytes ${start}-${end - 1}/${file.size}`)
+
+            xhr.upload.onprogress = (ev) => {
+              if (ev.lengthComputable) {
+                const chunkPct = ev.loaded / ev.total
+                const overall = Math.round(((i + chunkPct) / totalChunks) * 100)
+                setUploadProgress({ name: file.name, pct: overall })
+              }
             }
-          } catch {
-            alert(`Erro ao enviar ${file.name}: resposta inválida`)
+
+            xhr.onload = () => {
+              try {
+                const data = JSON.parse(xhr.responseText)
+                if ((xhr.status === 200 || xhr.status === 201) && data.secure_url) {
+                  resolve(data.secure_url)
+                } else if (xhr.status === 206) {
+                  resolve('partial') // chunk aceite, continua
+                } else {
+                  alert(`Erro ao enviar ${file.name}: ${data.error?.message ?? 'tente novamente'}`)
+                  resolve(null)
+                }
+              } catch {
+                alert(`Erro ao enviar ${file.name}: resposta inválida`)
+                resolve(null)
+              }
+            }
+
+            xhr.onerror = () => {
+              alert(`Erro ao enviar ${file.name}: falha de ligação`)
+              resolve(null)
+            }
+
+            xhr.send(form)
+          })
+
+          if (result === null) { failed = true; break }
+          if (result !== 'partial') secureUrl = result
+        }
+
+        setUploadProgress(null)
+        if (!failed && secureUrl) {
+          newFiles.push({ name: file.name, url: secureUrl, type: file.type, size: file.size })
+        }
+      } else {
+        // Upload normal para imagens e vídeos pequenos
+        await new Promise<void>((resolve) => {
+          const form = new FormData()
+          form.append('file', file)
+          form.append('signature', signature)
+          form.append('timestamp', String(timestamp))
+          form.append('folder', folder)
+          form.append('api_key', api_key)
+
+          const xhr = new XMLHttpRequest()
+          xhr.open('POST', `https://api.cloudinary.com/v1_1/${cloud_name}/auto/upload`)
+
+          xhr.upload.onprogress = (e) => {
+            if (e.lengthComputable) {
+              setUploadProgress({ name: file.name, pct: Math.round((e.loaded / e.total) * 100) })
+            }
           }
-          resolve()
-        }
 
-        xhr.onerror = () => {
-          setUploadProgress(null)
-          alert(`Erro ao enviar ${file.name}: falha de ligação`)
-          resolve()
-        }
+          xhr.onload = () => {
+            setUploadProgress(null)
+            try {
+              const data = JSON.parse(xhr.responseText)
+              if (xhr.status === 200 && data.secure_url) {
+                newFiles.push({ name: file.name, url: data.secure_url, type: file.type, size: file.size })
+              } else {
+                alert(`Erro ao enviar ${file.name}: ${data.error?.message ?? 'tente novamente'}`)
+              }
+            } catch {
+              alert(`Erro ao enviar ${file.name}: resposta inválida`)
+            }
+            resolve()
+          }
 
-        xhr.send(form)
-      })
+          xhr.onerror = () => {
+            setUploadProgress(null)
+            alert(`Erro ao enviar ${file.name}: falha de ligação`)
+            resolve()
+          }
+
+          xhr.send(form)
+        })
+      }
     }
 
     setFiles(prev => [...prev, ...newFiles])
