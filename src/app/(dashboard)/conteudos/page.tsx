@@ -20,9 +20,13 @@ export default async function ConteudosPage() {
   const postsQuery = role === 'admin'
     ? supabase.from('posts').select('*').in('status', ALL_NEW_STATUSES).order('publish_date', { ascending: true })
     : role === 'designer'
-    ? supabase.from('posts').select('*').in('status', DES_STATUSES).order('publish_date', { ascending: true })
+    // Designers veem posts em design statuses OU qualquer post onde são assignee
+    ? supabase.from('posts').select('*')
+        .or(`status.in.(${DES_STATUSES.join(',')}),assignee_ids.cs.{${user.id}}`)
+        .order('publish_date', { ascending: true })
     : role === 'social_media'
-    ? supabase.from('posts').select('*').in('status', SM_STATUSES).contains('assignee_ids', [user.id]).order('publish_date', { ascending: true })
+    // Social media vê todos os posts no workflow SM (sem restrição de assignee)
+    ? supabase.from('posts').select('*').in('status', SM_STATUSES).order('publish_date', { ascending: true })
     : supabase.from('posts').select('*').contains('assignee_ids', [user.id]).order('publish_date', { ascending: true })
 
   const [{ data: rawPosts }, { data: rawClients }, { data: rawProfiles }] = await Promise.all([

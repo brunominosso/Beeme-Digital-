@@ -5,12 +5,20 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import type { Client, Profile, Meeting, Task } from '@/types/database'
+import ActivityLogPanel from '@/components/ActivityLogPanel'
 
-function ApprovalLinkRow({ token }: { token: string }) {
-  const [copied, setCopied] = useState(false)
+function ApprovalLinkRow({ token, clientId, expiresAt: initialExpiresAt }: {
+  token: string; clientId: string; expiresAt: string | null
+}) {
+  const [copied,    setCopied]    = useState(false)
+  const [renewing,  setRenewing]  = useState(false)
+  const [expiresAt, setExpiresAt] = useState(initialExpiresAt)
+
   const url = typeof window !== 'undefined'
     ? `${window.location.origin}/aprovacao/${token}`
     : `/aprovacao/${token}`
+
+  const isExpired = expiresAt ? new Date(expiresAt) < new Date() : false
 
   function copy() {
     navigator.clipboard.writeText(url).then(() => {
@@ -19,21 +27,57 @@ function ApprovalLinkRow({ token }: { token: string }) {
     })
   }
 
+  async function renewToken() {
+    setRenewing(true)
+    const newExpiry = new Date()
+    newExpiry.setDate(newExpiry.getDate() + 30)
+    const supabase = createClient()
+    await supabase.from('clients')
+      .update({ approval_token_expires_at: newExpiry.toISOString() })
+      .eq('id', clientId)
+    setExpiresAt(newExpiry.toISOString())
+    setRenewing(false)
+  }
+
   return (
-    <div className="flex items-center gap-2">
-      <input
-        readOnly
-        value={url}
-        className="flex-1 px-3 py-2 rounded-lg text-xs text-white outline-none truncate"
-        style={{ background: 'var(--surface-2)', border: '1px solid var(--border)', color: 'var(--text-muted)' }}
-        onClick={e => (e.target as HTMLInputElement).select()}
-      />
-      <button
-        onClick={copy}
-        className="shrink-0 px-4 py-2 rounded-lg text-xs font-semibold text-white transition-colors"
-        style={{ background: copied ? 'var(--success)' : 'var(--accent)' }}>
-        {copied ? '✓ Copiado' : 'Copiar'}
-      </button>
+    <div className="space-y-2">
+      {expiresAt && (
+        <div className="flex items-center gap-2">
+          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${isExpired ? 'bg-red-500/20 text-red-400' : 'bg-green-500/20 text-green-400'}`}>
+            {isExpired ? '🔒 Link expirado' : `✓ Válido até ${new Date(expiresAt).toLocaleDateString('pt-BR')}`}
+          </span>
+          <button onClick={renewToken} disabled={renewing}
+            className="text-xs px-2.5 py-1 rounded-lg font-medium disabled:opacity-50"
+            style={{ background: 'var(--surface-2)', color: 'var(--lavanda-light)', border: '1px solid var(--border)' }}>
+            {renewing ? '...' : '↻ Renovar 30 dias'}
+          </button>
+        </div>
+      )}
+      {!expiresAt && (
+        <div className="flex items-center gap-2">
+          <span className="text-xs" style={{ color: 'var(--text-muted)' }}>Sem expiração definida</span>
+          <button onClick={renewToken} disabled={renewing}
+            className="text-xs px-2.5 py-1 rounded-lg font-medium disabled:opacity-50"
+            style={{ background: 'var(--surface-2)', color: 'var(--lavanda-light)', border: '1px solid var(--border)' }}>
+            {renewing ? '...' : '+ Definir expiração (30 dias)'}
+          </button>
+        </div>
+      )}
+      <div className="flex items-center gap-2">
+        <input
+          readOnly
+          value={url}
+          className="flex-1 px-3 py-2 rounded-lg text-xs outline-none truncate"
+          style={{ background: 'var(--surface-2)', border: `1px solid ${isExpired ? 'var(--danger)' : 'var(--border)'}`, color: 'var(--text-muted)' }}
+          onClick={e => (e.target as HTMLInputElement).select()}
+        />
+        <button
+          onClick={copy}
+          className="shrink-0 px-4 py-2 rounded-lg text-xs font-semibold text-white transition-colors"
+          style={{ background: copied ? 'var(--success)' : 'var(--accent)' }}>
+          {copied ? '✓ Copiado' : 'Copiar'}
+        </button>
+      </div>
     </div>
   )
 }
@@ -463,9 +507,19 @@ export default function ClientDetail({
                 Partilhe este link com o cliente. Sempre que um card for enviado para aprovação, ele aparecerá aqui automaticamente.
               </p>
               {client.approval_token
-                ? <ApprovalLinkRow token={client.approval_token} />
+                ? <ApprovalLinkRow
+                    token={client.approval_token}
+                    clientId={client.id}
+                    expiresAt={client.approval_token_expires_at ?? null}
+                  />
                 : <p className="text-xs" style={{ color: 'var(--danger)' }}>Token não gerado — corre o SQL de migração (schema-v12-approval.sql).</p>
               }
+            </div>
+
+            {/* Histórico de atividades */}
+            <div className="rounded-xl p-5" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+              <h2 className="text-sm font-semibold mb-3" style={{ color: 'var(--text-muted)' }}>HISTÓRICO DE ATIVIDADES</h2>
+              <ActivityLogPanel clientId={client.id} />
             </div>
 
             <div className="rounded-xl p-5" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>

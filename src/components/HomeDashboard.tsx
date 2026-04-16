@@ -253,7 +253,7 @@ function AdminView({ profile, myClients, allTasks, upcomingMeetings, todayStr, t
             <Link href="/leads" className="text-xs" style={{ color: 'var(--accent)' }}>Ver todos →</Link>
           </div>
           <div className="p-3 space-y-1.5 max-h-64 overflow-y-auto">
-            {myClients.slice(0, 8).map(c => (
+            {myClients.filter(c => c.status === 'ativo').slice(0, 8).map(c => (
               <button key={c.id} onClick={() => router.push(`/leads/${c.id}`)}
                 className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:opacity-80 text-left"
                 style={{ background: 'var(--surface-2)' }}>
@@ -312,6 +312,82 @@ function AdminView({ profile, myClients, allTasks, upcomingMeetings, todayStr, t
 // ────────────────────────────────────────────────────────────────
 // GESTOR VIEW
 // ────────────────────────────────────────────────────────────────
+
+// ─── ClientPipeline ───────────────────────────────────────────────────────────
+
+const PIPELINE_STAGES = [
+  { key: 'lead',       label: 'Lead',       color: '#6b7280' },
+  { key: 'onboarding', label: 'Onboarding', color: '#f59e0b' },
+  { key: 'ativo',      label: 'Ativo',      color: '#22c55e' },
+  { key: 'pausado',    label: 'Pausado',    color: '#a855f7' },
+  { key: 'churned',    label: 'Churned',    color: '#ef4444' },
+]
+
+function ClientPipeline({ clients: initialClients }: { clients: Client[] }) {
+  const [clients, setClients] = useState(initialClients)
+  const [dragging, setDragging] = useState<string | null>(null)
+  const [dragOver, setDragOver] = useState<string | null>(null)
+
+  async function moveClient(clientId: string, newStatus: string) {
+    setClients(prev => prev.map(c => c.id === clientId ? { ...c, status: newStatus } : c))
+    const supabase = createClient()
+    await supabase.from('clients').update({ status: newStatus }).eq('id', clientId)
+  }
+
+  return (
+    <div>
+      <h2 className="text-sm font-semibold mb-3" style={{ color: 'var(--text-muted)' }}>PIPELINE DE CLIENTES</h2>
+      <div className="flex gap-3 overflow-x-auto pb-2">
+        {PIPELINE_STAGES.map(stage => {
+          const stageClients = clients.filter(c => (c.status || 'lead') === stage.key)
+          const isOver = dragOver === stage.key
+          return (
+            <div key={stage.key}
+              className="shrink-0 w-48 rounded-xl transition-all"
+              style={{
+                background: isOver ? stage.color + '12' : 'var(--surface)',
+                border: `1px solid ${isOver ? stage.color : 'var(--border)'}`,
+                minHeight: '120px',
+              }}
+              onDragOver={e => { e.preventDefault(); setDragOver(stage.key) }}
+              onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragOver(null) }}
+              onDrop={e => { e.preventDefault(); if (dragging) moveClient(dragging, stage.key); setDragging(null); setDragOver(null) }}>
+              <div className="flex items-center gap-2 px-3 py-2 border-b" style={{ borderColor: 'var(--border)' }}>
+                <div className="w-2 h-2 rounded-full" style={{ background: stage.color }} />
+                <span className="text-xs font-semibold" style={{ color: stage.color }}>{stage.label}</span>
+                <span className="text-xs ml-auto px-1.5 py-0.5 rounded-full"
+                  style={{ background: stage.color + '20', color: stage.color }}>{stageClients.length}</span>
+              </div>
+              <div className="p-2 space-y-1.5">
+                {stageClients.map(c => (
+                  <div key={c.id}
+                    draggable
+                    onDragStart={() => setDragging(c.id)}
+                    onDragEnd={() => { setDragging(null); setDragOver(null) }}
+                    className="px-2.5 py-2 rounded-lg cursor-grab hover:opacity-90 transition-opacity"
+                    style={{
+                      background: 'var(--surface-2)',
+                      border: '1px solid var(--border)',
+                      opacity: dragging === c.id ? 0.4 : 1,
+                    }}>
+                    <p className="text-xs font-semibold truncate" style={{ color: 'var(--cream)' }}>{c.name}</p>
+                    {c.niche && <p className="text-xs truncate mt-0.5" style={{ color: 'var(--text-muted)' }}>{c.niche}</p>}
+                  </div>
+                ))}
+                {isOver && stageClients.length === 0 && (
+                  <div className="rounded-lg border-2 border-dashed h-12 flex items-center justify-center text-xs"
+                    style={{ borderColor: stage.color, color: stage.color }}>Largar aqui</div>
+                )}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+// ─── GestorView ───────────────────────────────────────────────────────────────
 
 function GestorView({ profile, myClients, allTasks, upcomingMeetings, todayStr, tomorrowStr, weekEndStr }: Props) {
   const router = useRouter()
@@ -521,6 +597,11 @@ function GestorView({ profile, myClients, allTasks, upcomingMeetings, todayStr, 
         ))}
       </div>
 
+      {/* Pipeline de Clientes */}
+      {myClients.length > 0 && (
+        <ClientPipeline clients={myClients} />
+      )}
+
       {/* Clients grid */}
       {myClients.length > 0 && (
         <div>
@@ -529,7 +610,7 @@ function GestorView({ profile, myClients, allTasks, upcomingMeetings, todayStr, 
             <Link href="/leads" className="text-xs" style={{ color: 'var(--accent)' }}>Ver todos →</Link>
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
-            {myClients.slice(0, 10).map(c => (
+            {myClients.filter(c => c.status === 'ativo').slice(0, 10).map(c => (
               <button key={c.id} onClick={() => router.push(`/leads/${c.id}`)}
                 className="rounded-xl overflow-hidden text-left hover:opacity-90 transition-opacity"
                 style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>

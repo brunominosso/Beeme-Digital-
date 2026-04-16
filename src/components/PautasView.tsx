@@ -84,9 +84,10 @@ function formatWeekRange(days: Date[]): string {
 // ── Componente principal ──────────────────────────────────────
 
 // Etapas do pipeline com o tipo de pauta correspondente para criar
-const PIPELINE_ETAPAS: { key: string; label: string; pautaTipo: string; dot: string }[] = [
+// auto: true → gerido automaticamente, não aparece no banner de pendências
+const PIPELINE_ETAPAS: { key: string; label: string; pautaTipo: string; dot: string; auto?: boolean }[] = [
   { key: 'planejamento', label: 'Planejamento',  pautaTipo: 'planejamento',  dot: '#9FA4DB' },
-  { key: 'alteracoes',   label: 'Alterações',    pautaTipo: 'roteiro',       dot: '#60a5fa' },
+  { key: 'alteracoes',   label: 'Alterações',    pautaTipo: 'roteiro',       dot: '#60a5fa', auto: true },
   { key: 'captacao',     label: 'Captação',       pautaTipo: 'captacao',      dot: '#fb923c' },
   { key: 'edicao',       label: 'Edição',         pautaTipo: 'edicao_video',  dot: '#e879f9' },
   { key: 'design',       label: 'Design',          pautaTipo: 'edicao_cards',  dot: '#2dd4bf' },
@@ -104,8 +105,9 @@ interface Props {
   currentUserId: string
 }
 
-export default function PautasView({ initialPautas, clients, profiles, producao = [], refMonthStr, userRole, currentUserId }: Props) {
+export default function PautasView({ initialPautas, clients, profiles, producao: initialProducao = [], refMonthStr, userRole, currentUserId }: Props) {
   const [pautas, setPautas] = useState<Pauta[]>(initialPautas)
+  const [producao, setProducao] = useState<ProducaoMensal[]>(initialProducao)
   const [weekRef, setWeekRef] = useState<Date>(new Date())
   const [showForm, setShowForm] = useState(false)
   const [selected, setSelected] = useState<Pauta | null>(null)
@@ -127,16 +129,17 @@ export default function PautasView({ initialPautas, clients, profiles, producao 
   const [editingSave, setEditingSave] = useState(false)
 
   // Painel de pendências
-  const [showPending, setShowPending] = useState(true)
+  const [expandedPendClient, setExpandedPendClient] = useState<string | null>(null)
 
   // Pendências do pipeline por cliente
+  // Mostra etapas que ainda não estão concluídas (exclui etapas automáticas)
   const pendencias = useMemo(() => {
     return clients
       .map(c => {
         const faltam = PIPELINE_ETAPAS.filter(e => {
+          if (e.auto) return false // etapas automáticas não aparecem no banner
           const rec = producao.find(r => r.client_id === c.id && r.etapa === e.key)
-          // Mostra como faltando se: sem registo, pendente, ou bloqueado
-          return !rec || rec.status === 'pendente' || rec.status === 'bloqueado'
+          return !rec || rec.status !== 'concluido'
         })
         return { client: c, faltam }
       })
@@ -248,21 +251,35 @@ export default function PautasView({ initialPautas, clients, profiles, producao 
         // Mês de referência = próximo mês a partir da data da pauta
         const pautaDate = new Date(selected.data + 'T12:00:00')
         const refMonth = new Date(pautaDate.getFullYear(), pautaDate.getMonth() + 1, 1)
-        const refMonthStr = refMonth.toISOString().split('T')[0]
+        const pautaRefMonth = refMonth.toISOString().split('T')[0]
+        const novasNotas = `Auto: pauta "${TIPOS[selected.tipo]?.label ?? selected.tipo}" concluída`
 
-        await supabase.from('producao_mensal').upsert({
+        const { data: upserted } = await supabase.from('producao_mensal').upsert({
           client_id: selected.client_id,
-          mes: refMonthStr,
+          mes: pautaRefMonth,
           etapa,
           status: 'concluido',
           updated_by: user?.id,
-          notas: `Auto: pauta "${TIPOS[selected.tipo]?.label ?? selected.tipo}" concluída`,
+          notas: novasNotas,
           updated_at: new Date().toISOString(),
-        }, { onConflict: 'client_id,mes,etapa' })
+        }, { onConflict: 'client_id,mes,etapa' }).select().single()
+
+        // Atualiza estado local imediatamente — sem precisar recarregar a página
+        if (upserted) {
+          setProducao(prev => {
+            const idx = prev.findIndex(r => r.client_id === selected.client_id && r.etapa === etapa && r.mes === pautaRefMonth)
+            if (idx >= 0) {
+              const next = [...prev]
+              next[idx] = upserted as ProducaoMensal
+              return next
+            }
+            return [...prev, upserted as ProducaoMensal]
+          })
+        }
       }
     }
 
-    const updated = { ...selected, status: editStatus, notas: editNotas || null }
+    const updated = { ...selected, status: editStatus as Pauta['status'], notas: editNotas || null }
     setPautas(prev => prev.map(p => p.id === selected.id ? updated : p))
     setSelected(updated)
     setEditingSave(false)
@@ -335,65 +352,83 @@ export default function PautasView({ initialPautas, clients, profiles, producao 
           )}
         </div>
 
-        {/* Painel de pendências do pipeline */}
-        {/* Debug: clients={clients.length} producao={producao.length} pendencias={pendencias.length} */}
-        {(pendencias.length > 0 || (clients.length > 0 && producao.length === 0)) && (
-          <div className="border-b shrink-0" style={{ borderColor: 'var(--border)', background: '#fbbf2406' }}>
-            <button
-              onClick={() => setShowPending(v => !v)}
-              className="w-full px-6 py-2.5 flex items-center gap-2 text-left"
-            >
-              <span className="text-xs font-semibold" style={{ color: '#fbbf24' }}>
-                ⚠ {pendencias.length} cliente{pendencias.length > 1 ? 's' : ''} com etapas em falta no pipeline
-              </span>
-              <span className="ml-auto text-xs" style={{ color: 'var(--text-dim)' }}>
-                {showPending ? '▲ ocultar' : '▼ ver'}
-              </span>
-            </button>
+        {/* ── Barra de pendências compacta ─────────────────── */}
+        {pendencias.length > 0 && (
+          <div className="border-b shrink-0 px-6 py-2.5 flex items-center gap-2 flex-wrap"
+            style={{ borderColor: 'var(--border)', background: '#fbbf2406' }}>
 
-            {showPending && (
-              <div className="px-6 pb-4 grid grid-cols-1 gap-2 md:grid-cols-2 lg:grid-cols-3">
-                {pendencias.map(({ client, faltam }) => (
-                  <div key={client.id} className="rounded-xl p-3"
-                    style={{ background: 'var(--surface-2)', border: '1px solid var(--border)' }}>
-                    <p className="text-xs font-semibold mb-2" style={{ color: 'var(--cream)' }}>
-                      {client.name}
-                    </p>
-                    <div className="flex flex-wrap gap-1.5">
-                      {faltam.map(e => {
-                        // Encontra assignee padrão (primeiro SM para etapas SM, designer para design/edição)
-                        const isDesignerEtapa = e.key === 'design' || e.key === 'edicao'
-                        const defaultRole = isDesignerEtapa ? 'designer' : 'social_media'
-                        const defaultAssignee = profiles.find(p => p.role === defaultRole)?.id ?? ''
+            <span className="text-xs font-semibold shrink-0" style={{ color: '#fbbf24' }}>
+              ⚠ Pipeline:
+            </span>
 
-                        return (
-                          <button
-                            key={e.key}
-                            onClick={() => {
-                              setFClient(client.id)
-                              setFTipo(e.pautaTipo)
-                              setFAssignee(defaultAssignee)
-                              setFData(toDateStr(new Date()))
-                              setFTurno('manha')
-                              setFNotas('')
-                              setSaveError('')
-                              setShowForm(true)
-                            }}
-                            className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs transition-all hover:opacity-80"
-                            style={{ background: e.dot + '18', border: `1px solid ${e.dot}40`, color: e.dot }}
-                            title={`Criar pauta: ${e.label} para ${client.name}`}
-                          >
-                            <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: e.dot }} />
-                            {e.label}
-                            <span style={{ opacity: 0.6 }}>+</span>
-                          </button>
-                        )
-                      })}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
+            {pendencias.map(({ client, faltam }) => {
+              const isOpen = expandedPendClient === client.id
+              const isUrgent = faltam.length >= 4
+
+              return (
+                <div key={client.id} className="relative">
+                  <button
+                    onClick={() => setExpandedPendClient(isOpen ? null : client.id)}
+                    className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium transition-all"
+                    style={{
+                      background: isUrgent ? '#f8717115' : '#fbbf2412',
+                      border: `1px solid ${isUrgent ? '#f87171' : '#fbbf24'}50`,
+                      color: isUrgent ? '#f87171' : '#fbbf24',
+                    }}>
+                    {client.name}
+                    <span className="opacity-50 font-normal">{faltam.length}</span>
+                    <span className="opacity-40 text-xs">{isOpen ? '▲' : '▼'}</span>
+                  </button>
+
+                  {/* Dropdown com etapas */}
+                  {isOpen && (
+                    <>
+                      {/* Overlay para fechar */}
+                      <div className="fixed inset-0 z-10"
+                        onClick={() => setExpandedPendClient(null)} />
+                      <div className="absolute top-full left-0 mt-1.5 z-20 rounded-xl p-2 flex flex-col gap-1"
+                        style={{
+                          background: 'var(--surface)',
+                          border: '1px solid var(--border)',
+                          boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
+                          minWidth: 180,
+                        }}>
+                        <p className="text-xs font-semibold px-2 pt-1 pb-1.5 border-b"
+                          style={{ color: 'var(--cream)', borderColor: 'var(--border)' }}>
+                          {client.name}
+                        </p>
+                        {faltam.map(e => {
+                          const isDesignerEtapa = e.key === 'design' || e.key === 'edicao'
+                          const defaultRole = isDesignerEtapa ? 'designer' : 'social_media'
+                          const defaultAssignee = profiles.find(p => p.role === defaultRole)?.id ?? ''
+                          return (
+                            <button
+                              key={e.key}
+                              onClick={() => {
+                                setFClient(client.id)
+                                setFTipo(e.pautaTipo)
+                                setFAssignee(defaultAssignee)
+                                setFData(toDateStr(new Date()))
+                                setFTurno('manha')
+                                setFNotas('')
+                                setSaveError('')
+                                setExpandedPendClient(null)
+                                setShowForm(true)
+                              }}
+                              className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs text-left transition-all hover:opacity-80"
+                              style={{ background: e.dot + '15', color: e.dot }}>
+                              <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: e.dot }} />
+                              {e.label}
+                              <span className="ml-auto opacity-50">+</span>
+                            </button>
+                          )
+                        })}
+                      </div>
+                    </>
+                  )}
+                </div>
+              )
+            })}
           </div>
         )}
 

@@ -1,8 +1,11 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
+import { createClient } from '@/lib/supabase/client'
 import type { Profile } from '@/types/database'
+
+type Utilization = { tasks: number; urgent: number; posts: number }
 
 const ROLE_LABELS: Record<string, string> = {
   admin:        'Admin',
@@ -29,7 +32,33 @@ function getInitials(name: string) {
 }
 
 export default function AdminView({ profiles }: { profiles: Profile[] }) {
-  const [showInvite, setShowInvite] = useState(false)
+  const [showInvite, setShowInvite]   = useState(false)
+  const [utilization, setUtilization] = useState<Record<string, Utilization>>({})
+
+  useEffect(() => {
+    async function fetchUtilization() {
+      const supabase = createClient()
+      const [{ data: tasks }, { data: posts }] = await Promise.all([
+        supabase.from('tasks').select('assignee_id, priority').neq('status', 'done'),
+        supabase.from('posts').select('assignee_ids, status').not('status', 'in', '("publicado","sm_aprovado","sm_postado")'),
+      ])
+      const map: Record<string, Utilization> = {}
+      for (const t of tasks ?? []) {
+        if (!t.assignee_id) continue
+        if (!map[t.assignee_id]) map[t.assignee_id] = { tasks: 0, urgent: 0, posts: 0 }
+        map[t.assignee_id].tasks++
+        if (t.priority === 'urgent') map[t.assignee_id].urgent++
+      }
+      for (const p of posts ?? []) {
+        for (const id of (p.assignee_ids ?? [])) {
+          if (!map[id]) map[id] = { tasks: 0, urgent: 0, posts: 0 }
+          map[id].posts++
+        }
+      }
+      setUtilization(map)
+    }
+    fetchUtilization()
+  }, [])
   const [iEmail, setIEmail]         = useState('')
   const [iName, setIName]           = useState('')
   const [iRole, setIRole]           = useState('gestor')
@@ -110,10 +139,33 @@ export default function AdminView({ profiles }: { profiles: Profile[] }) {
                   style={{ background: roleColor + '20', color: roleColor, border: `1px solid ${roleColor}30` }}>
                   {roleLabel}
                 </span>
-                <div className="flex items-center gap-1.5 shrink-0">
-                  <div className="w-2 h-2 rounded-full" style={{ background: 'var(--success)' }} />
-                  <span className="text-xs" style={{ color: 'var(--text-muted)' }}>Activo</span>
-                </div>
+                {(() => {
+                  const u = utilization[p.id]
+                  if (!u) return null
+                  const overloaded = u.tasks > 10 || u.urgent > 3
+                  return (
+                    <div className="flex items-center gap-2 shrink-0">
+                      {u.tasks > 0 && (
+                        <span className="text-xs px-2 py-0.5 rounded-full"
+                          style={{ background: 'var(--surface-2)', color: 'var(--text-muted)' }}>
+                          {u.tasks} tarefas
+                        </span>
+                      )}
+                      {u.posts > 0 && (
+                        <span className="text-xs px-2 py-0.5 rounded-full"
+                          style={{ background: 'var(--surface-2)', color: 'var(--text-muted)' }}>
+                          {u.posts} posts
+                        </span>
+                      )}
+                      {overloaded && (
+                        <span className="text-xs px-2 py-0.5 rounded-full font-semibold"
+                          style={{ background: '#ef444420', color: '#ef4444', border: '1px solid #ef444440' }}>
+                          ⚠ Sobrecarregado
+                        </span>
+                      )}
+                    </div>
+                  )
+                })()}
                 <Link href={`/admin/preview/${p.id}`}
                   className="text-xs px-3 py-1.5 rounded-lg font-medium shrink-0 hover:opacity-80 transition-opacity"
                   style={{ background: 'var(--surface-2)', color: 'var(--text-muted)', border: '1px solid var(--border)' }}>

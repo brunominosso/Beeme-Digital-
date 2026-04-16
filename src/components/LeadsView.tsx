@@ -24,6 +24,7 @@ export default function LeadsView({
   const [dragging, setDragging] = useState<string | null>(null)
   const [dragOver, setDragOver] = useState<string | null>(null)
   const [showNewForm, setShowNewForm] = useState(false)
+  const [showInactive, setShowInactive] = useState(false)
   const [newName, setNewName] = useState('')
   const [newCity, setNewCity] = useState('')
   const [newInstagram, setNewInstagram] = useState('')
@@ -85,13 +86,17 @@ export default function LeadsView({
           {PIPELINE_COLS.map(col => {
             const colClients = pipelineClients.filter(c => c.status === col.id)
             const isOver = dragOver === col.id
+            const isInactive = col.id === 'inativo'
+            const collapsed = isInactive && !showInactive
+
             return (
               <div key={col.id}
-                className="rounded-xl min-h-48 flex flex-col shrink-0 w-64 md:w-auto"
+                className="rounded-xl flex flex-col shrink-0 w-64 md:w-auto"
                 style={{
                   background: 'var(--surface)',
                   border: `1px solid ${isOver ? col.color : 'var(--border)'}`,
                   transition: 'border-color 0.15s',
+                  minHeight: collapsed ? 'auto' : '12rem',
                 }}
                 onDragOver={e => { e.preventDefault(); setDragOver(col.id) }}
                 onDragLeave={() => setDragOver(null)}
@@ -102,56 +107,70 @@ export default function LeadsView({
                 }}
                 >
                 {/* Col header */}
-                <div className="px-4 py-3 border-b flex items-center gap-2" style={{ borderColor: 'var(--border)' }}>
+                <div
+                  className={`px-4 py-3 flex items-center gap-2 ${!collapsed ? 'border-b' : ''}`}
+                  style={{ borderColor: 'var(--border)' }}
+                >
                   <div className="w-2.5 h-2.5 rounded-full" style={{ background: col.color }} />
                   <span className="text-sm font-semibold text-white">{col.label}</span>
                   <span className="ml-auto text-xs px-1.5 py-0.5 rounded-full"
                     style={{ background: 'var(--surface-2)', color: 'var(--text-muted)' }}>
                     {colClients.length}
                   </span>
-                </div>
-
-                {/* Cards */}
-                <div className="p-2 space-y-2 flex-1">
-                  {colClients.map(c => (
-                    <div key={c.id}
-                      draggable
-                      onDragStart={() => setDragging(c.id)}
-                      onDragEnd={() => setDragging(null)}
-                      onClick={() => router.push(`/leads/${c.id}`)}
-                      className="rounded-lg p-3 cursor-pointer hover:opacity-90 transition-opacity"
-                      style={{
-                        background: 'var(--surface-2)',
-                        border: '1px solid var(--border)',
-                        opacity: dragging === c.id ? 0.4 : 1,
-                      }}>
-                      <div className="flex items-center gap-2.5">
-                        <div className="w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold text-white shrink-0"
-                          style={{ background: col.color + '40', border: `1px solid ${col.color}40`, color: col.color }}>
-                          {getInitials(c.name)}
-                        </div>
-                        <div className="min-w-0">
-                          <p className="text-sm font-medium text-white truncate">{c.name}</p>
-                          {c.city && <p className="text-xs truncate" style={{ color: 'var(--text-muted)' }}>{c.city}</p>}
-                        </div>
-                      </div>
-                      {/* Move to ativo button */}
-                      {col.id === 'onboarding' && (
-                        <button
-                          onClick={e => { e.stopPropagation(); moveClient(c.id, 'ativo') }}
-                          className="mt-2 w-full text-xs py-1 rounded font-medium transition-colors"
-                          style={{ background: 'var(--success)20', color: 'var(--success)', border: '1px solid var(--success)40' }}>
-                          ✓ Mover para Cliente Ativo
-                        </button>
-                      )}
-                    </div>
-                  ))}
-                  {colClients.length === 0 && (
-                    <div className="h-16 flex items-center justify-center text-xs" style={{ color: 'var(--text-muted)' }}>
-                      Arrasta aqui
-                    </div>
+                  {isInactive && (
+                    <button
+                      onClick={() => setShowInactive(v => !v)}
+                      className="text-xs px-2 py-0.5 rounded-lg ml-1"
+                      style={{ background: 'var(--surface-2)', color: 'var(--text-muted)' }}
+                    >
+                      {showInactive ? '▲' : '▼'}
+                    </button>
                   )}
                 </div>
+
+                {/* Cards — hidden when collapsed */}
+                {!collapsed && (
+                  <div className="p-2 space-y-2 flex-1">
+                    {colClients.map(c => (
+                      <div key={c.id}
+                        draggable
+                        onDragStart={() => setDragging(c.id)}
+                        onDragEnd={() => setDragging(null)}
+                        onClick={() => router.push(`/leads/${c.id}`)}
+                        className="rounded-lg p-3 cursor-pointer hover:opacity-90 transition-opacity"
+                        style={{
+                          background: 'var(--surface-2)',
+                          border: '1px solid var(--border)',
+                          opacity: dragging === c.id ? 0.4 : 1,
+                        }}>
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold text-white shrink-0"
+                            style={{ background: col.color + '40', border: `1px solid ${col.color}40`, color: col.color }}>
+                            {getInitials(c.name)}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium text-white truncate">{c.name}</p>
+                            {c.city && <p className="text-xs truncate" style={{ color: 'var(--text-muted)' }}>{c.city}</p>}
+                          </div>
+                        </div>
+                        {/* Move to ativo button */}
+                        {col.id === 'onboarding' && (
+                          <button
+                            onClick={e => { e.stopPropagation(); moveClient(c.id, 'ativo') }}
+                            className="mt-2 w-full text-xs py-1 rounded font-medium transition-colors"
+                            style={{ background: 'var(--success)20', color: 'var(--success)', border: '1px solid var(--success)40' }}>
+                            ✓ Mover para Cliente Ativo
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                    {colClients.length === 0 && (
+                      <div className="h-16 flex items-center justify-center text-xs" style={{ color: 'var(--text-muted)' }}>
+                        Arrasta aqui
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             )
           })}

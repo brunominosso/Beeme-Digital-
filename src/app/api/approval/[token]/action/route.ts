@@ -31,7 +31,7 @@ export async function POST(
     body = bodySchema.parse(await req.json())
   } catch (err) {
     if (err instanceof z.ZodError) {
-      return NextResponse.json({ error: err.errors[0].message }, { status: 400 })
+      return NextResponse.json({ error: err.issues[0]?.message ?? 'Dados inválidos' }, { status: 400 })
     }
     return NextResponse.json({ error: 'Dados inválidos' }, { status: 400 })
   }
@@ -53,7 +53,7 @@ export async function POST(
   // Verifica que o post pertence a este cliente e está em aprovação
   const { data: post } = await supabase
     .from('posts')
-    .select('id, client_id, status')
+    .select('id, client_id, status, approval_notes_history')
     .eq('id', taskId)
     .eq('client_id', client.id)        // garante que o card é deste cliente
     .eq('status', 'cliente_aprovacao') // só age em cards em aprovação
@@ -82,9 +82,23 @@ export async function POST(
     return NextResponse.json({ error: 'Descreva o que precisa ser ajustado.' }, { status: 400 })
   }
 
+  // Versiona o histórico de ajustes
+  const existingHistory = (post.approval_notes_history as { version: number; notes: string; date: string; reviewer: string }[]) ?? []
+  const newEntry = {
+    version: existingHistory.length + 1,
+    notes: notes.trim(),
+    date: new Date().toISOString().split('T')[0],
+    reviewer: 'Cliente',
+  }
+  const updatedHistory = [...existingHistory, newEntry]
+
   const { error } = await supabase
     .from('posts')
-    .update({ status: 'design_ajuste', approval_notes: notes.trim() })
+    .update({
+      status: 'design_ajuste',
+      approval_notes: notes.trim(),
+      approval_notes_history: updatedHistory,
+    })
     .eq('id', taskId)
 
   if (error) {

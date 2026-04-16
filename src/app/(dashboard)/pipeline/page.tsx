@@ -66,6 +66,14 @@ export default async function PipelinePage() {
     ajusteCount[post.client_id] = (ajusteCount[post.client_id] ?? 0) + 1
   }
 
+  // ── Posts por cliente (mês de referência) ────────────────
+  const postsByClient: Record<string, any[]> = {}
+  for (const post of (rawPosts ?? []) as any[]) {
+    if (!post.client_id) continue
+    if (!postsByClient[post.client_id]) postsByClient[post.client_id] = []
+    postsByClient[post.client_id].push(post)
+  }
+
   // ── Auto-popular: pautas concluídas + posts + alterações ──
   const existingKeys = new Set(
     (rawProducao ?? []).map((r: any) => `${r.client_id}__${r.mes}__${r.etapa}`)
@@ -84,12 +92,6 @@ export default async function PipelinePage() {
   }
 
   // 2. Posts todos publicados → agendamento concluído
-  const postsByClient: Record<string, any[]> = {}
-  for (const post of (rawPosts ?? []) as any[]) {
-    if (!post.client_id) continue
-    if (!postsByClient[post.client_id]) postsByClient[post.client_id] = []
-    postsByClient[post.client_id].push(post)
-  }
   for (const [clientId, posts] of Object.entries(postsByClient)) {
     if (posts.length > 0 && posts.every((p: any) => p.status === 'sm_postado')) {
       autoUpserts.push({
@@ -99,28 +101,56 @@ export default async function PipelinePage() {
     }
   }
 
-  // 3. Alterações — semáforo baseado em posts em design_ajuste
+  // 3. Alterações — semáforo baseado em posts em design_ajuste (workload do designer)
   for (const client of clients as any[]) {
     const count = ajusteCount[client.id] ?? 0
     let status: string
     let notas: string
 
     if (count === 0) {
-      // Sem ajustes pendentes — verde
       status = 'concluido'
       notas = 'Auto: sem alterações pendentes'
     } else if (count <= 2) {
-      // 1-2 posts em ajuste — amarelo
       status = 'em_andamento'
       notas = `Auto: ${count} post${count > 1 ? 's' : ''} em ajuste pelo designer`
     } else {
-      // 3+ posts em ajuste — vermelho
       status = 'bloqueado'
       notas = `Auto: ${count} posts em ajuste — atenção necessária`
     }
 
     autoUpserts.push({
       client_id: client.id, mes: refMonthStr, etapa: 'alteracoes',
+      status, notas,
+    })
+  }
+
+  // 4. Revisão — estado de aprovação do cliente
+  // Inicia sempre como verde. Fica amarelo quando cliente pede alteração no link de aprovação.
+  // Volta ao verde quando todos os posts são aprovados.
+  for (const client of clients as any[]) {
+    const ajustes = ajusteCount[client.id] ?? 0
+    const clientPosts = postsByClient[client.id] ?? []
+    const allApproved = clientPosts.length > 0 &&
+      clientPosts.every((p: any) => p.status === 'sm_aprovado' || p.status === 'sm_postado')
+
+    let status: string
+    let notas: string
+
+    if (ajustes > 0) {
+      // Cliente pediu alteração(ões) — alerta
+      status = 'em_andamento'
+      notas = `Auto: cliente pediu alteração em ${ajustes} material${ajustes > 1 ? 'is' : ''}`
+    } else if (allApproved) {
+      status = 'concluido'
+      notas = 'Auto: todos os materiais aprovados pelo cliente'
+    } else {
+      // Nenhum ajuste pendente e ainda não totalmente aprovado — verde por omissão
+      status = 'concluido'
+      notas = 'Auto: sem pedidos de alteração'
+    }
+
+    autoUpserts.push({
+      client_id: client.id, mes: refMonthStr, etapa: 'revisao',
       status, notas,
     })
   }

@@ -23,11 +23,26 @@ export default async function ApprovalPage({
   // Busca cliente pelo token
   const { data: client } = await supabase
     .from('clients')
-    .select('id, name, logo_url, approval_token')
+    .select('id, name, logo_url, approval_token, approval_token_expires_at')
     .eq('approval_token', token)
     .single()
 
   if (!client) notFound()
+
+  // Verifica expiração do token
+  if (client.approval_token_expires_at && new Date(client.approval_token_expires_at) < new Date()) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-6" style={{ background: '#08080F' }}>
+        <div className="text-center max-w-sm">
+          <p className="text-5xl mb-4">🔒</p>
+          <h1 className="text-xl font-bold text-white mb-2">Link expirado</h1>
+          <p className="text-sm" style={{ color: '#9ca3af' }}>
+            Este link de aprovação expirou. Por favor, contacte a agência para obter um novo link.
+          </p>
+        </div>
+      </div>
+    )
+  }
 
   // Busca posts em aprovação para este cliente
   const { data: posts } = await supabase

@@ -1,7 +1,6 @@
 'use client'
 
-import { useState, useMemo, useCallback } from 'react'
-import { createClient } from '@/lib/supabase/client'
+import { useState, useMemo } from 'react'
 import type { Client, Profile, ProducaoMensal } from '@/types/database'
 
 // ── Etapas do pipeline ────────────────────────────────────────
@@ -11,16 +10,17 @@ type Etapa = {
   label: string
   short: string
   role: 'social_media' | 'designer' | 'ambos'
+  auto?: boolean  // gerido automaticamente — célula não clicável
 }
 
 const ETAPAS: Etapa[] = [
-  { key: 'planejamento', label: 'Planejamento de Conteúdos', short: 'Planej.',  role: 'social_media' },
-  { key: 'alteracoes',   label: 'Alterações',                short: 'Altera.',  role: 'social_media' },
-  { key: 'captacao',     label: 'Captação Audiovisual',      short: 'Captação', role: 'social_media' },
-  { key: 'edicao',       label: 'Edição Material',           short: 'Edição',   role: 'designer' },
-  { key: 'design',       label: 'Design Cards',              short: 'Design',   role: 'designer' },
-  { key: 'revisao',      label: 'Revisão Interna',           short: 'Revisão',  role: 'social_media' },
-  { key: 'agendamento',  label: 'Agendamento',               short: 'Agenda.',  role: 'social_media' },
+  { key: 'planejamento', label: 'Planejamento de Conteúdos', short: 'Planej.',   role: 'social_media', auto: true },
+  { key: 'alteracoes',   label: 'Alterações',                short: 'Altera.',   role: 'social_media', auto: true },
+  { key: 'captacao',     label: 'Captação Audiovisual',      short: 'Captação',  role: 'social_media', auto: true },
+  { key: 'edicao',       label: 'Edição Material',           short: 'Edição',    role: 'designer',     auto: true },
+  { key: 'design',       label: 'Design Cards',              short: 'Design',    role: 'designer',     auto: true },
+  { key: 'revisao',      label: 'Aprovação do Cliente',      short: 'Aprovação', role: 'social_media', auto: true },
+  { key: 'agendamento',  label: 'Agendamento',               short: 'Agenda.',   role: 'social_media', auto: true },
 ]
 
 // ── Status ────────────────────────────────────────────────────
@@ -32,13 +32,6 @@ const STATUS: Record<StatusKey, { label: string; color: string; bg: string; icon
   em_andamento: { label: 'Em andamento',  color: '#fbbf24', bg: '#fbbf2412', icon: '◑' },
   concluido:    { label: 'Concluído',     color: '#4ade80', bg: '#4ade8015', icon: '✓' },
   bloqueado:    { label: 'Bloqueado',     color: '#f87171', bg: '#f8717115', icon: '✕' },
-}
-
-const STATUS_CYCLE: StatusKey[] = ['pendente', 'em_andamento', 'concluido', 'bloqueado']
-
-function nextStatus(current: StatusKey): StatusKey {
-  const idx = STATUS_CYCLE.indexOf(current)
-  return STATUS_CYCLE[(idx + 1) % STATUS_CYCLE.length]
 }
 
 // ── Helpers de data ───────────────────────────────────────────
@@ -71,20 +64,14 @@ interface Props {
   currentUserId: string
 }
 
+
 export default function PipelineView({
   clients,
   producao,
-  profiles,
   refMonthStr,
-  userRole,
-  currentUserId,
 }: Props) {
-  const [records, setRecords] = useState<ProducaoMensal[]>(producao)
+  const [records] = useState<ProducaoMensal[]>(producao)
   const [viewMonth, setViewMonth] = useState(refMonthStr)
-  const [saving, setSaving] = useState<string | null>(null) // "clientId-etapa"
-  const [noteModal, setNoteModal] = useState<{ clientId: string; etapa: string; note: string } | null>(null)
-
-  const canEdit = userRole === 'admin' || userRole === 'gestor' || userRole === 'social_media'
 
   // Index de records por clientId+etapa+mes para acesso rápido
   const recordIndex = useMemo(() => {
@@ -116,73 +103,6 @@ export default function PipelineView({
 
   const diasAte25 = daysUntil25()
   const isUrgent = diasAte25 <= 5
-
-  async function toggleStatus(clientId: string, etapa: string) {
-    if (!canEdit) return
-    const key = `${clientId}__${etapa}`
-    const current = (recordIndex[key]?.status ?? 'pendente') as StatusKey
-    const next = nextStatus(current)
-    const saveKey = `${clientId}-${etapa}`
-    setSaving(saveKey)
-
-    const supabase = createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-
-    const existing = recordIndex[key]
-    if (existing) {
-      await supabase.from('producao_mensal').update({
-        status: next,
-        updated_by: user?.id,
-        updated_at: new Date().toISOString(),
-      }).eq('id', existing.id)
-
-      setRecords(prev => prev.map(r =>
-        r.id === existing.id ? { ...r, status: next, updated_by: user?.id ?? null } : r
-      ))
-    } else {
-      const { data } = await supabase.from('producao_mensal').insert({
-        client_id: clientId,
-        mes: viewMonth,
-        etapa,
-        status: next,
-        updated_by: user?.id,
-      }).select().single()
-      if (data) setRecords(prev => [...prev, data as ProducaoMensal])
-    }
-
-    setSaving(null)
-  }
-
-  async function saveNote() {
-    if (!noteModal) return
-    const { clientId, etapa, note } = noteModal
-    const key = `${clientId}__${etapa}`
-    const existing = recordIndex[key]
-    const supabase = createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-
-    if (existing) {
-      await supabase.from('producao_mensal').update({
-        notas: note || null,
-        updated_by: user?.id,
-        updated_at: new Date().toISOString(),
-      }).eq('id', existing.id)
-      setRecords(prev => prev.map(r =>
-        r.id === existing.id ? { ...r, notas: note || null } : r
-      ))
-    } else {
-      const { data } = await supabase.from('producao_mensal').insert({
-        client_id: clientId,
-        mes: viewMonth,
-        etapa,
-        status: 'pendente',
-        notas: note || null,
-        updated_by: user?.id,
-      }).select().single()
-      if (data) setRecords(prev => [...prev, data as ProducaoMensal])
-    }
-    setNoteModal(null)
-  }
 
   // Navegar meses
   function shiftMonth(delta: number) {
@@ -343,15 +263,15 @@ export default function PipelineView({
                     style={{ background: 'var(--surface)', borderColor: 'var(--border)', minWidth: 110 }}>
                     <p className="text-xs font-semibold" style={{ color: 'var(--cream)' }}>
                       {e.short}
-                      {e.key === 'alteracoes' && (
-                        <span className="ml-1 text-xs" style={{ color: '#9FA4DB' }} title="Automático — baseado em posts rejeitados">⚡</span>
+                      {e.auto && (
+                        <span className="ml-1 text-xs" style={{ color: '#9FA4DB' }} title="Automático">⚡</span>
                       )}
                     </p>
                     <p className="text-xs mt-0.5" style={{
                       color: e.role === 'designer' ? '#2dd4bf' : 'var(--text-dim)',
                       fontSize: '0.6rem',
                     }}>
-                      {e.key === 'alteracoes' ? 'Automático' : e.role === 'designer' ? 'Designer' : 'Social Media'}
+                      {e.auto ? 'Automático' : e.role === 'designer' ? 'Designer' : 'Social Media'}
                     </p>
                   </th>
                 ))}
@@ -400,61 +320,25 @@ export default function PipelineView({
                       </div>
                     </td>
 
-                    {/* Células de etapa */}
+                    {/* Células de etapa — todas automáticas, apenas leitura */}
                     {ETAPAS.map(e => {
                       const key = `${client.id}__${e.key}`
                       const record = recordIndex[key]
                       const st = (record?.status ?? 'pendente') as StatusKey
                       const cfg = STATUS[st]
-                      const isSaving = saving === `${client.id}-${e.key}`
 
                       return (
                         <td key={e.key} className="px-2 py-2 text-center border-r"
                           style={{ borderColor: 'var(--border)' }}>
-                          <div className="flex flex-col items-center gap-1">
-                            {e.key === 'alteracoes' ? (
-                              // Alterações — célula automática, não clicável
-                              <div
-                                title={record?.notas ?? 'Auto: sem alterações pendentes'}
-                                className="w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold"
-                                style={{
-                                  background: cfg.bg,
-                                  border: `1.5px solid ${cfg.color}60`,
-                                  color: cfg.color,
-                                }}>
-                                {isSaving ? '·' : cfg.icon}
-                              </div>
-                            ) : (
-                              <button
-                                onClick={() => toggleStatus(client.id, e.key)}
-                                disabled={!canEdit || isSaving}
-                                title={`${cfg.label} — clica para avançar`}
-                                className="w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold transition-all disabled:opacity-50"
-                                style={{
-                                  background: cfg.bg,
-                                  border: `1.5px solid ${st === 'pendente' ? 'var(--border)' : cfg.color + '60'}`,
-                                  color: cfg.color,
-                                  cursor: canEdit ? 'pointer' : 'default',
-                                }}>
-                                {isSaving ? '·' : cfg.icon}
-                              </button>
-                            )}
-                            {record?.notas && e.key !== 'alteracoes' && (
-                              <span className="w-1.5 h-1.5 rounded-full" style={{ background: '#fbbf24' }}
-                                title={record.notas} />
-                            )}
-                            {canEdit && (
-                              <button
-                                onClick={() => setNoteModal({
-                                  clientId: client.id,
-                                  etapa: e.key,
-                                  note: record?.notas ?? '',
-                                })}
-                                className="text-xs opacity-0 group-hover:opacity-100 transition-opacity"
-                                style={{ color: 'var(--text-dim)', fontSize: '0.6rem' }}>
-                                nota
-                              </button>
-                            )}
+                          <div
+                            title={record?.notas ?? cfg.label}
+                            className="mx-auto w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold"
+                            style={{
+                              background: cfg.bg,
+                              border: `1.5px solid ${st === 'pendente' ? 'var(--border)' : cfg.color + '60'}`,
+                              color: cfg.color,
+                            }}>
+                            {cfg.icon}
                           </div>
                         </td>
                       )
@@ -502,52 +386,9 @@ export default function PipelineView({
           </div>
         ))}
         <span className="text-xs ml-auto" style={{ color: 'var(--text-dim)' }}>
-          Clica numa célula para avançar o status
+          Passa o cursor sobre uma célula para ver o detalhe
         </span>
       </div>
-
-      {/* ── Modal de nota ───────────────────────────────────── */}
-      {noteModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
-          style={{ background: 'rgba(0,0,0,0.75)' }}>
-          <div className="w-full max-w-sm rounded-xl overflow-hidden"
-            style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
-            <div className="flex items-center justify-between px-5 py-4 border-b"
-              style={{ borderColor: 'var(--border)' }}>
-              <h3 className="font-semibold text-sm" style={{ color: 'var(--cream)' }}>
-                Nota — {ETAPAS.find(e => e.key === noteModal.etapa)?.label}
-              </h3>
-              <button onClick={() => setNoteModal(null)} style={{ color: 'var(--text-muted)' }}>✕</button>
-            </div>
-            <div className="p-5 space-y-3">
-              <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                {clients.find(c => c.id === noteModal.clientId)?.name}
-              </p>
-              <textarea
-                value={noteModal.note}
-                onChange={e => setNoteModal({ ...noteModal, note: e.target.value })}
-                rows={4}
-                placeholder="Ex: aguardando material do cliente, captação marcada para quinta..."
-                className="w-full px-3 py-2 rounded-lg text-sm outline-none resize-none"
-                style={{ background: 'var(--surface-2)', border: '1px solid var(--border)', color: 'var(--text)', lineHeight: 1.6 }}
-                autoFocus
-              />
-              <div className="flex gap-2">
-                <button onClick={saveNote}
-                  className="flex-1 py-2 rounded-lg text-sm font-semibold"
-                  style={{ background: 'var(--accent)', color: '#08080F' }}>
-                  Guardar
-                </button>
-                <button onClick={() => setNoteModal(null)}
-                  className="px-4 py-2 rounded-lg text-sm"
-                  style={{ background: 'var(--surface-2)', color: 'var(--text-muted)' }}>
-                  Cancelar
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   )
 }

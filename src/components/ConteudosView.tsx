@@ -2,6 +2,7 @@
 
 import { useState, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { logActivity } from '@/components/ActivityLogPanel'
 import type { Post, Client, Profile } from '@/types/database'
 
 type PostFile = { name: string; url: string; type: string; size: number }
@@ -61,15 +62,20 @@ function PostModal({ post, clients, profiles, onClose, onSave, userRole }: {
   const [title,       setTitle]       = useState(post.title ?? '')
   const [status,      setStatus]      = useState(post.status ?? defaultStatus)
   const [clientId,    setClientId]    = useState(post.client_id ?? '')
-  const [platform,    setPlatform]    = useState(post.platform ?? '')
+  const [platforms,   setPlatforms]   = useState<string[]>(post.platform ? post.platform.split(',').map(s => s.trim()).filter(Boolean) : [])
   const [format,      setFormat]      = useState(post.format ?? '')
   const [dueDate,     setDueDate]     = useState(post.due_date ?? '')
   const [publishDate, setPublishDate] = useState(post.publish_date ?? '')
   const [assignees,   setAssignees]   = useState<string[]>(post.assignee_ids ?? [])
   const [notes,       setNotes]       = useState(post.notes ?? '')
   const [files,       setFiles]       = useState<PostFile[]>((post.files as PostFile[]) ?? [])
-  const [uploading,   setUploading]   = useState(false)
-  const [saving,      setSaving]      = useState(false)
+  const [uploading,     setUploading]     = useState(false)
+  const [saving,        setSaving]        = useState(false)
+  const [caption,       setCaption]       = useState(post.caption ?? '')
+  const [cta,           setCta]           = useState(post.cta ?? '')
+  const [hashtags,      setHashtags]      = useState<string[]>(post.hashtags ?? [])
+  const [hashtagInput,  setHashtagInput]  = useState('')
+  const [deliveryUrl,   setDeliveryUrl]   = useState(post.delivery_url ?? '')
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   function toggleAssignee(id: string) {
@@ -109,13 +115,17 @@ function PostModal({ post, clients, profiles, onClose, onSave, userRole }: {
     const payload = {
       title, status,
       client_id:    clientId || null,
-      platform:     platform || null,
+      platform:     platforms.length > 0 ? platforms.join(', ') : null,
       format:       format || null,
       due_date:     dueDate || null,
       publish_date: publishDate || null,
       assignee_ids: assignees,
       notes:        notes || null,
       files:        files.length > 0 ? files : [],
+      caption:      caption || null,
+      cta:          cta || null,
+      hashtags:     hashtags.length > 0 ? hashtags : [],
+      delivery_url: deliveryUrl || null,
     }
     let data: Post | null = null
     if (isNew) {
@@ -127,7 +137,15 @@ function PostModal({ post, clients, profiles, onClose, onSave, userRole }: {
       data = res.data as Post
     }
     setSaving(false)
-    if (data) { onSave(data); onClose() }
+    if (data) {
+      logActivity({
+        entityType: 'post',
+        entityId: data.id,
+        action: isNew ? 'created' : 'updated',
+        details: { title: data.title, status: data.status },
+      })
+      onSave(data); onClose()
+    }
   }
 
   const inp = { background: 'var(--surface-2)', border: '1px solid var(--border)', color: 'var(--text)' } as const
@@ -173,13 +191,17 @@ function PostModal({ post, clients, profiles, onClose, onSave, userRole }: {
             <div>
               <p className="text-xs mb-1.5" style={{ color: 'var(--text-muted)' }}>Rede social</p>
               <div className="flex flex-wrap gap-1.5">
-                {PLATFORMS.map(p => (
-                  <button key={p} onClick={() => setPlatform(platform === p ? '' : p)}
-                    className="px-2.5 py-1 rounded-full text-xs font-medium"
-                    style={{ background: platform === p ? '#22c55e30' : 'var(--surface-2)', color: platform === p ? '#22c55e' : 'var(--text-muted)', border: `1px solid ${platform === p ? '#22c55e' : 'var(--border)'}` }}>
-                    {p}
-                  </button>
-                ))}
+                {PLATFORMS.map(p => {
+                  const active = platforms.includes(p)
+                  return (
+                    <button key={p}
+                      onClick={() => setPlatforms(prev => active ? prev.filter(x => x !== p) : [...prev, p])}
+                      className="px-2.5 py-1 rounded-full text-xs font-medium"
+                      style={{ background: active ? '#22c55e30' : 'var(--surface-2)', color: active ? '#22c55e' : 'var(--text-muted)', border: `1px solid ${active ? '#22c55e' : 'var(--border)'}` }}>
+                      {p}
+                    </button>
+                  )
+                })}
               </div>
             </div>
             <div>
@@ -235,6 +257,81 @@ function PostModal({ post, clients, profiles, onClose, onSave, userRole }: {
               className="w-full px-3 py-2 rounded-lg text-sm outline-none resize-none" style={inp}
               placeholder="Observações..." />
           </div>
+
+          {/* Histórico de revisões — somente leitura */}
+          {post.approval_notes_history && post.approval_notes_history.length > 0 && (
+            <div>
+              <p className="text-xs mb-2" style={{ color: 'var(--text-muted)' }}>Histórico de revisões</p>
+              <div className="space-y-1.5">
+                {post.approval_notes_history.map((h, i) => (
+                  <div key={i} className="px-3 py-2 rounded-lg" style={{ background: '#f9731610', border: '1px solid #f9731630' }}>
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs font-semibold" style={{ color: '#f97316' }}>Revisão {h.version}</span>
+                      <span className="text-xs" style={{ color: 'var(--text-muted)' }}>{h.date} · {h.reviewer}</span>
+                    </div>
+                    <p className="text-xs leading-snug" style={{ color: '#fed7aa' }}>{h.notes}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Legenda, CTA e Hashtags — Social Media / Admin */}
+          {(userRole === 'social_media' || userRole === 'admin' || !userRole) && (
+            <>
+              <div>
+                <p className="text-xs mb-1.5" style={{ color: 'var(--text-muted)' }}>Legenda</p>
+                <textarea value={caption} onChange={e => setCaption(e.target.value)} rows={3}
+                  className="w-full px-3 py-2 rounded-lg text-sm outline-none resize-none" style={inp}
+                  placeholder="Texto da legenda do post..." />
+              </div>
+              <div>
+                <p className="text-xs mb-1.5" style={{ color: 'var(--text-muted)' }}>Call to Action</p>
+                <input type="text" value={cta} onChange={e => setCta(e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg text-sm outline-none" style={inp}
+                  placeholder="Ex: Acesse o link na bio, Comente abaixo..." />
+              </div>
+              <div>
+                <p className="text-xs mb-1.5" style={{ color: 'var(--text-muted)' }}>Hashtags</p>
+                <div className="rounded-lg p-2 flex flex-wrap gap-1.5 min-h-10 cursor-text" style={inp}>
+                  {hashtags.map((tag, i) => (
+                    <span key={i} className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium shrink-0"
+                      style={{ background: '#6366f130', color: '#818cf8', border: '1px solid #6366f140' }}>
+                      #{tag}
+                      <button onClick={() => setHashtags(prev => prev.filter((_, idx) => idx !== i))}
+                        className="ml-0.5 hover:opacity-60 leading-none">×</button>
+                    </span>
+                  ))}
+                  <input type="text" value={hashtagInput}
+                    onChange={e => setHashtagInput(e.target.value.replace(/^#/, ''))}
+                    onKeyDown={e => {
+                      if ((e.key === 'Enter' || e.key === ',') && hashtagInput.trim()) {
+                        e.preventDefault()
+                        const tag = hashtagInput.trim().replace(/^#/, '').replace(/\s+/g, '_')
+                        if (tag && !hashtags.includes(tag)) setHashtags(prev => [...prev, tag])
+                        setHashtagInput('')
+                      }
+                      if (e.key === 'Backspace' && !hashtagInput && hashtags.length > 0) {
+                        setHashtags(prev => prev.slice(0, -1))
+                      }
+                    }}
+                    className="flex-1 min-w-24 bg-transparent text-sm outline-none"
+                    style={{ color: 'var(--text)' }}
+                    placeholder={hashtags.length === 0 ? 'Digite e pressione Enter...' : ''} />
+                </div>
+              </div>
+            </>
+          )}
+
+          {/* Link de entrega — Editor / Admin */}
+          {(userRole === 'editor' || userRole === 'admin' || !userRole) && (
+            <div>
+              <p className="text-xs mb-1.5" style={{ color: 'var(--text-muted)' }}>Link de entrega</p>
+              <input type="url" value={deliveryUrl} onChange={e => setDeliveryUrl(e.target.value)}
+                className="w-full px-3 py-2 rounded-lg text-sm outline-none" style={inp}
+                placeholder="Drive, Vimeo, Frame.io..." />
+            </div>
+          )}
 
           {/* Ficheiros */}
           <div>
@@ -315,10 +412,16 @@ function PostCard({ post, clients, profiles, onClick }: {
   const client = clients.find(c => c.id === post.client_id)
   const assigneeProfiles = profiles.filter(p => post.assignee_ids?.includes(p.id))
 
+  const isAjuste = post.status === 'design_ajuste'
+
   return (
-    <div onClick={onClick} className="rounded-xl p-3 cursor-pointer hover:opacity-90 transition-opacity space-y-2"
-      style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
-      <p className="text-sm font-medium leading-snug" style={{ color: 'var(--cream)' }}>{post.title}</p>
+    <div onClick={onClick} className="rounded-xl p-3 cursor-pointer hover:opacity-90 transition-opacity space-y-2 relative"
+      style={{ background: 'var(--surface)', border: `1px solid ${isAjuste ? '#f97316' : 'var(--border)'}`, borderLeft: isAjuste ? '4px solid #f97316' : undefined }}>
+      {isAjuste && (
+        <span className="absolute top-2 right-2 text-xs font-bold px-1.5 py-0.5 rounded-full"
+          style={{ background: '#f9731620', color: '#f97316' }}>⚠ Ajuste</span>
+      )}
+      <p className="text-sm font-medium leading-snug pr-16" style={{ color: 'var(--cream)' }}>{post.title}</p>
       <div className="flex items-center gap-1.5 flex-wrap">
         <span className="text-xs px-2 py-0.5 rounded-full font-medium"
           style={{ background: st.color + '25', color: st.color }}>
@@ -337,11 +440,26 @@ function PostCard({ post, clients, profiles, onClick }: {
       {post.publish_date && (
         <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Publicar até {fmtShort(post.publish_date)}</p>
       )}
-      {(post as any).approval_notes && (
+      {post.approval_notes && (
         <div className="rounded-lg px-2.5 py-2" style={{ background: '#f9731610', border: '1px solid #f9731630' }}>
-          <p className="text-xs font-semibold mb-0.5" style={{ color: '#f97316' }}>💬 Ajuste solicitado</p>
-          <p className="text-xs leading-snug" style={{ color: '#fed7aa' }}>{(post as any).approval_notes}</p>
+          <p className="text-xs font-semibold mb-0.5" style={{ color: '#f97316' }}>
+            💬 Ajuste solicitado
+            {post.approval_notes_history && post.approval_notes_history.length > 1 && (
+              <span className="ml-2 font-normal" style={{ color: 'var(--text-muted)' }}>
+                (revisão {post.approval_notes_history.length})
+              </span>
+            )}
+          </p>
+          <p className="text-xs leading-snug" style={{ color: '#fed7aa' }}>{post.approval_notes}</p>
         </div>
+      )}
+      {post.delivery_url && (
+        <a href={post.delivery_url} target="_blank" rel="noreferrer"
+          className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg hover:opacity-80 transition-opacity"
+          style={{ background: '#22c55e15', color: '#22c55e', border: '1px solid #22c55e30' }}
+          onClick={e => e.stopPropagation()}>
+          🔗 Ver entrega
+        </a>
       )}
 
       {/* Ficheiros */}
@@ -505,8 +623,8 @@ function CalendarioView({ posts, clients, myClients, profiles, onEdit, onNew }: 
                       {day}
                     </span>
                   </div>
-                  <div className="space-y-1">
-                    {dayPosts.slice(0, 3).map(p => {
+                  <div className="space-y-1 overflow-y-auto" style={{ maxHeight: '120px' }}>
+                    {dayPosts.map(p => {
                       const st = STATUS_MAP[p.status] ?? { color: '#6b7280' }
                       const clientName = clients.find(c => c.id === p.client_id)?.name ?? ''
                       return (
@@ -519,9 +637,6 @@ function CalendarioView({ posts, clients, myClients, profiles, onEdit, onNew }: 
                         </div>
                       )
                     })}
-                    {dayPosts.length > 3 && (
-                      <p className="text-xs pl-1" style={{ color: 'var(--text-muted)' }}>+{dayPosts.length - 3}</p>
-                    )}
                   </div>
                 </>
               )}
@@ -581,9 +696,11 @@ function KanbanView({ posts: initialPosts, clients, profiles, onEdit, userRole }
     null
 
   async function movePost(postId: string, newStatus: string) {
+    const oldStatus = posts.find(p => p.id === postId)?.status
     setPosts(prev => prev.map(p => p.id === postId ? { ...p, status: newStatus } : p))
     const supabase = createClient()
     await supabase.from('posts').update({ status: newStatus }).eq('id', postId)
+    logActivity({ entityType: 'post', entityId: postId, action: 'status_changed', details: { status_from: oldStatus, status_to: newStatus } })
   }
 
   // ── Quadro de role (SM / Designer) ──────────────────────────────────────────

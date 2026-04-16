@@ -44,6 +44,7 @@ export default function MeetingsView({
   const [fStatus, setFStatus] = useState<'scheduled' | 'done'>('scheduled')
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState('')
+  const [conflictWarning, setConflictWarning] = useState('')
 
   // Edit notes state
   const [editingNotes, setEditingNotes] = useState(false)
@@ -62,10 +63,27 @@ export default function MeetingsView({
     setFAttendees(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
   }
 
-  async function saveMeeting() {
+  async function saveMeeting(forceOverride = false) {
     if (!fTitle.trim() || !fDate) return
     setSaving(true)
     setSaveError('')
+    setConflictWarning('')
+
+    if (!forceOverride && fAttendees.length > 0) {
+      const newStart = new Date(fDate).getTime()
+      const conflicts = meetings.filter(m => {
+        if (m.status !== 'scheduled') return false
+        const mStart = new Date(m.date).getTime()
+        const withinHour = Math.abs(mStart - newStart) < 60 * 60 * 1000
+        return withinHour && (m.attendees as string[] | null)?.some(a => fAttendees.includes(a))
+      })
+      if (conflicts.length > 0) {
+        const names = conflicts.map(c => c.title).join(', ')
+        setConflictWarning(`Conflito de horário com: "${names}". Clique em Criar mesmo assim para continuar.`)
+        setSaving(false)
+        return
+      }
+    }
     const supabase = createClient()
     const { data: { user } } = await supabase.auth.getUser()
     const { data, error } = await supabase.from('meetings').insert({
@@ -382,12 +400,13 @@ export default function MeetingsView({
       {/* New meeting modal */}
       {showForm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.75)' }}>
-          <div className="w-full max-w-lg rounded-xl p-6 space-y-4" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
-            <div className="flex items-center justify-between">
+          <div className="w-full max-w-lg rounded-xl overflow-hidden flex flex-col max-h-[90vh]" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+            <div className="flex items-center justify-between px-6 py-4 border-b shrink-0" style={{ borderColor: 'var(--border)' }}>
               <h2 className="font-semibold" style={{ color: 'var(--cream)' }}>Nova Reunião</h2>
               <button onClick={() => setShowForm(false)} style={{ color: 'var(--text-muted)' }}>✕</button>
             </div>
 
+            <div className="overflow-y-auto flex-1 p-6 space-y-4">
             <input type="text" placeholder="Título *" value={fTitle} onChange={e => setFTitle(e.target.value)}
               className={inputClass} style={inputStyle} autoFocus />
 
@@ -446,16 +465,28 @@ export default function MeetingsView({
             <textarea placeholder="Notas / agenda (opcional)" value={fNotes} onChange={e => setFNotes(e.target.value)}
               rows={3} className={inputClass} style={{ ...inputStyle, resize: 'none' } as React.CSSProperties} />
 
+            {conflictWarning && (
+              <div className="px-3 py-2 rounded-lg" style={{ background: '#f9731615', border: '1px solid #f9731640' }}>
+                <p className="text-xs font-semibold mb-1" style={{ color: '#f97316' }}>⚠ Conflito de horário</p>
+                <p className="text-xs" style={{ color: '#fed7aa' }}>{conflictWarning}</p>
+                <button onClick={() => saveMeeting(true)}
+                  className="mt-2 text-xs px-3 py-1.5 rounded-lg font-medium"
+                  style={{ background: '#f9731630', color: '#f97316', border: '1px solid #f9731650' }}>
+                  Criar mesmo assim
+                </button>
+              </div>
+            )}
             {saveError && (
               <p className="text-xs px-3 py-2 rounded-lg" style={{ background: 'var(--danger)15', color: 'var(--danger)' }}>
                 Erro: {saveError}
               </p>
             )}
-            <button onClick={saveMeeting} disabled={!fTitle.trim() || !fDate || saving}
+            <button onClick={() => saveMeeting()} disabled={!fTitle.trim() || !fDate || saving}
               className="w-full py-2.5 rounded-lg text-sm font-semibold text-white disabled:opacity-40"
               style={{ background: 'var(--accent)' }}>
               {saving ? 'A criar...' : 'Criar reunião'}
             </button>
+            </div>{/* /overflow-y-auto */}
           </div>
         </div>
       )}

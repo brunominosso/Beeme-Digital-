@@ -34,7 +34,7 @@ export default function FinancialView({
   initialSchedules: ScheduleWithClient[]
 }) {
   const router = useRouter()
-  const [tab, setTab] = useState<'invoices' | 'expenses' | 'schedules'>('invoices')
+  const [tab, setTab] = useState<'invoices' | 'expenses' | 'schedules' | 'calendario'>('invoices')
   const [invoices, setInvoices] = useState(initialInvoices)
   const [expenses, setExpenses] = useState(initialExpenses)
   const [schedules, setSchedules] = useState(initialSchedules)
@@ -150,6 +150,42 @@ export default function FinancialView({
     setExpenses(prev => prev.filter(e => e.id !== id))
   }
 
+  function exportCsv(rows: Record<string, unknown>[], filename: string) {
+    if (!rows.length) return
+    const headers = Object.keys(rows[0]).join(',')
+    const body = rows.map(r =>
+      Object.values(r).map(v => {
+        const s = String(v ?? '').replace(/"/g, '""')
+        return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s}"` : s
+      }).join(',')
+    ).join('\n')
+    const blob = new Blob(['\uFEFF' + headers + '\n' + body], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url; a.download = filename; a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  function exportInvoices() {
+    exportCsv(invoices.map(i => ({
+      cliente: i.clients?.name ?? '',
+      descricao: i.description,
+      valor: Number(i.amount).toFixed(2),
+      status: INVOICE_STATUS[i.status]?.label ?? i.status,
+      vencimento: i.due_date ?? '',
+      criado_em: new Date(i.created_at).toLocaleDateString('pt-BR'),
+    })), `faturas-${new Date().toISOString().split('T')[0]}.csv`)
+  }
+
+  function exportExpenses() {
+    exportCsv(expenses.map(e => ({
+      descricao: e.description,
+      categoria: EXPENSE_CATEGORIES[e.category] ?? e.category,
+      valor: Number(e.amount).toFixed(2),
+      data: new Date(e.date).toLocaleDateString('pt-BR'),
+    })), `despesas-${new Date().toISOString().split('T')[0]}.csv`)
+  }
+
   // Preenche campos do formulário de recorrência ao selecionar cliente
   function onScheduleClientChange(clientId: string) {
     setSClientId(clientId)
@@ -170,20 +206,29 @@ export default function FinancialView({
     <div className="p-8 max-w-5xl mx-auto">
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-white">Financeiro</h1>
-        {tab !== 'schedules' && (
-          <button onClick={() => setShowForm(true)}
-            className="px-4 py-2 rounded-lg text-sm font-semibold text-white"
-            style={{ background: 'var(--accent)' }}>
-            + {tab === 'invoices' ? 'Nova fatura' : 'Nova despesa'}
-          </button>
-        )}
-        {tab === 'schedules' && (
-          <button onClick={() => setShowForm(true)}
-            className="px-4 py-2 rounded-lg text-sm font-semibold text-white"
-            style={{ background: 'var(--accent)' }}>
-            + Nova recorrência
-          </button>
-        )}
+        <div className="flex items-center gap-2">
+          {tab === 'invoices' && (
+            <button onClick={exportInvoices}
+              className="px-3 py-2 rounded-lg text-sm font-medium"
+              style={{ background: 'var(--surface)', color: 'var(--text-muted)', border: '1px solid var(--border)' }}>
+              ↓ CSV
+            </button>
+          )}
+          {tab === 'expenses' && (
+            <button onClick={exportExpenses}
+              className="px-3 py-2 rounded-lg text-sm font-medium"
+              style={{ background: 'var(--surface)', color: 'var(--text-muted)', border: '1px solid var(--border)' }}>
+              ↓ CSV
+            </button>
+          )}
+          {tab !== 'calendario' && (
+            <button onClick={() => setShowForm(true)}
+              className="px-4 py-2 rounded-lg text-sm font-semibold text-white"
+              style={{ background: 'var(--accent)' }}>
+              + {tab === 'invoices' ? 'Nova fatura' : tab === 'expenses' ? 'Nova despesa' : 'Nova recorrência'}
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Stats */}
@@ -217,11 +262,14 @@ export default function FinancialView({
       )}
 
       {/* Tabs */}
-      <div className="flex gap-2 mb-4">
+      <div className="flex gap-2 mb-4 flex-wrap">
         {([
-          { key: 'invoices', label: '🧾 Faturas' },
-          { key: 'expenses', label: '💸 Despesas' },
-          ...(hasSchedulesAccess ? [{ key: 'schedules', label: '📅 Recorrências' }] : []),
+          { key: 'invoices',   label: '🧾 Faturas' },
+          { key: 'expenses',   label: '💸 Despesas' },
+          ...(hasSchedulesAccess ? [
+            { key: 'schedules',  label: '🔁 Recorrências' },
+            { key: 'calendario', label: '📅 Calendário' },
+          ] : []),
         ] as { key: typeof tab; label: string }[]).map(t => (
           <button key={t.key} onClick={() => setTab(t.key)}
             className="px-4 py-2 rounded-lg text-sm font-medium transition-colors"
@@ -244,29 +292,39 @@ export default function FinancialView({
               <p className="text-white font-medium">Nenhuma fatura ainda</p>
             </div>
           ) : invoices.map(inv => {
-            const s = INVOICE_STATUS[inv.status] ?? INVOICE_STATUS.pending
+            const isReallyOverdue = inv.status === 'pending' && inv.due_date && new Date(inv.due_date + 'T23:59:59') < now
+            const daysLate = isReallyOverdue ? Math.floor((now.getTime() - new Date(inv.due_date! + 'T00:00:00').getTime()) / 86400000) : 0
+            const displayStatus = isReallyOverdue ? 'overdue' : inv.status
+            const s = INVOICE_STATUS[displayStatus] ?? INVOICE_STATUS.pending
             return (
               <div key={inv.id} className="flex items-center gap-4 px-5 py-4 rounded-xl"
-                style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+                style={{ background: 'var(--surface)', border: `1px solid ${isReallyOverdue ? 'var(--danger)40' : 'var(--border)'}` }}>
                 <div className="flex-1 min-w-0">
                   <p className="font-medium text-white">{inv.description}</p>
                   <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
                     {inv.clients?.name} · {new Date(inv.created_at).toLocaleDateString('pt-BR')}
-                    {inv.due_date && ` · Vence ${new Date(inv.due_date).toLocaleDateString('pt-BR')}`}
+                    {inv.due_date && ` · Vence ${new Date(inv.due_date + 'T12:00:00').toLocaleDateString('pt-BR')}`}
                   </p>
                 </div>
                 <span className="font-bold text-white">{fmt(Number(inv.amount))}</span>
-                <span className="text-xs px-2 py-1 rounded-full" style={{ background: `${s.color}20`, color: s.color }}>
-                  {s.label}
-                </span>
+                <div className="flex flex-col items-end gap-1">
+                  <span className="text-xs px-2 py-1 rounded-full" style={{ background: `${s.color}20`, color: s.color }}>
+                    {s.label}
+                  </span>
+                  {isReallyOverdue && daysLate > 0 && (
+                    <span className="text-xs font-semibold" style={{ color: 'var(--danger)' }}>
+                      {daysLate}d em atraso
+                    </span>
+                  )}
+                </div>
                 {inv.status === 'pending' && (
                   <button onClick={() => markPaid(inv.id)}
-                    className="text-xs px-2 py-1 rounded-lg font-medium"
+                    className="text-xs px-2 py-1 rounded-lg font-medium shrink-0"
                     style={{ background: 'var(--success)20', color: 'var(--success)', border: '1px solid var(--success)' }}>
-                    ✓ Marcar pago
+                    ✓ Pago
                   </button>
                 )}
-                <button onClick={() => deleteInvoice(inv.id)} className="text-xs" style={{ color: 'var(--text-muted)' }}>✕</button>
+                <button onClick={() => deleteInvoice(inv.id)} className="text-xs shrink-0" style={{ color: 'var(--text-muted)' }}>✕</button>
               </div>
             )
           })}
@@ -348,16 +406,59 @@ export default function FinancialView({
         </div>
       )}
 
+      {/* Calendário de recebimentos */}
+      {tab === 'calendario' && (
+        <div>
+          <p className="text-sm mb-4" style={{ color: 'var(--text-muted)' }}>
+            Recorrências ativas por dia do mês — {now.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}
+          </p>
+          <div className="grid grid-cols-7 gap-2">
+            {Array.from({ length: 31 }, (_, i) => i + 1).map(day => {
+              const daySchedules = schedules.filter(s => s.payment_day === day && s.active)
+              const hasItems = daySchedules.length > 0
+              const isToday = now.getDate() === day
+              return (
+                <div key={day} className="rounded-xl p-2 min-h-20 flex flex-col"
+                  style={{
+                    background: isToday ? '#9FA4DB12' : 'var(--surface)',
+                    border: `1px solid ${isToday ? 'var(--lavanda)' : hasItems ? '#a855f740' : 'var(--border)'}`,
+                  }}>
+                  <span className="text-xs font-semibold mb-1" style={{
+                    color: isToday ? 'var(--lavanda)' : hasItems ? '#a855f7' : 'var(--text-muted)'
+                  }}>{day}</span>
+                  <div className="space-y-1 flex-1">
+                    {daySchedules.map(s => (
+                      <div key={s.id} className="px-1.5 py-1 rounded text-xs leading-tight"
+                        style={{ background: '#a855f720', border: '1px solid #a855f730' }}>
+                        <p className="truncate font-medium" style={{ color: '#d8b4fe' }}>{s.clients?.name ?? '—'}</p>
+                        <p className="truncate" style={{ color: '#a855f7' }}>{fmt(Number(s.amount))}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+          {schedules.filter(s => s.active).length === 0 && (
+            <div className="text-center py-12" style={{ color: 'var(--text-muted)' }}>
+              <p className="text-4xl mb-2">📅</p>
+              <p>Nenhuma recorrência ativa</p>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Modal */}
       {showForm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.7)' }}>
-          <div className="w-full max-w-md rounded-xl p-6 space-y-4" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
-            <div className="flex items-center justify-between">
+          <div className="w-full max-w-md rounded-xl overflow-hidden flex flex-col max-h-[90vh]" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+            <div className="flex items-center justify-between px-6 py-4 border-b shrink-0" style={{ borderColor: 'var(--border)' }}>
               <h2 className="font-semibold text-white">
                 {tab === 'invoices' ? 'Nova fatura' : tab === 'expenses' ? 'Nova despesa' : 'Nova recorrência'}
               </h2>
               <button onClick={() => setShowForm(false)} style={{ color: 'var(--text-muted)' }}>✕</button>
             </div>
+            <div className="overflow-y-auto flex-1 p-6 space-y-4">
 
             {tab === 'invoices' && (
               <>
@@ -419,7 +520,8 @@ export default function FinancialView({
                 </button>
               </>
             )}
-          </div>
+            </div>{/* /overflow-y-auto */}
+          </div>{/* /modal card */}
         </div>
       )}
     </div>
