@@ -177,6 +177,23 @@ export default function PautasView({ initialPautas, clients, profiles, producao:
   }, [clients, producao, pautas, weekRef])
 
   const canCreate = userRole === 'admin' || userRole === 'social_media'
+  const canEdit = canCreate  // alias para uso existente no formulário de criação
+  const canEditDetail = (p: Pauta | null) =>
+    canCreate || (userRole === 'designer' && p?.assignee_id === currentUserId)
+
+  const weekDays = useMemo(() => getWeekDays(weekRef), [weekRef])
+
+  // Colaboradores equipa principal (SM + Designer)
+  const team = useMemo(() =>
+    profiles.filter(p => p.role === 'social_media' || p.role === 'designer'),
+    [profiles]
+  )
+
+  // Colaboradores captação (linha separada, só visível para admin)
+  const captacaoTeam = useMemo(() =>
+    profiles.filter(p => p.role === 'captacao'),
+    [profiles]
+  )
 
   // Clientes de captação sem pauta agendada no mês visualizado
   const captacaoPendentes = useMemo(() => {
@@ -196,23 +213,6 @@ export default function PautasView({ initialPautas, clients, profiles, producao:
         .map(c => ({ client: c, person }))
     )
   }, [captacaoTeam, clients, pautas, weekRef])
-  const canEdit = canCreate  // alias para uso existente no formulário de criação
-  const canEditDetail = (p: Pauta | null) =>
-    canCreate || (userRole === 'designer' && p?.assignee_id === currentUserId)
-
-  const weekDays = useMemo(() => getWeekDays(weekRef), [weekRef])
-
-  // Colaboradores equipa principal (SM + Designer)
-  const team = useMemo(() =>
-    profiles.filter(p => p.role === 'social_media' || p.role === 'designer'),
-    [profiles]
-  )
-
-  // Colaboradores captação (linha separada, só visível para admin)
-  const captacaoTeam = useMemo(() =>
-    profiles.filter(p => p.role === 'captacao'),
-    [profiles]
-  )
 
   const filteredTeam = useMemo(() => {
     if (userRole === 'captacao') return profiles.filter(p => p.id === currentUserId)
