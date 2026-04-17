@@ -108,6 +108,7 @@ function PostModal({ post, clients, profiles, onClose, onSave, userRole }: {
   const [hashtags,      setHashtags]      = useState<string[]>(post.hashtags ?? [])
   const [hashtagInput,  setHashtagInput]  = useState('')
   const [deliveryUrl,   setDeliveryUrl]   = useState(post.delivery_url ?? '')
+  const [showNotesModal, setShowNotesModal] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   function toggleAssignee(id: string) {
@@ -400,13 +401,49 @@ function PostModal({ post, clients, profiles, onClose, onSave, userRole }: {
             </div>
           </div>
 
-          {/* Notas */}
+          {/* Notas / Briefing */}
           <div>
-            <p className="text-xs mb-1.5" style={{ color: 'var(--text-muted)' }}>Notas</p>
-            <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={2}
+            <div className="flex items-center justify-between mb-1.5">
+              <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Notas / Briefing</p>
+              {notes.length > 80 && (
+                <button type="button" onClick={() => setShowNotesModal(true)}
+                  className="text-xs px-2 py-0.5 rounded-lg"
+                  style={{ color: 'var(--accent)', background: 'var(--surface-2)' }}>
+                  🔎 Ver completo
+                </button>
+              )}
+            </div>
+            <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={4}
               className="w-full px-3 py-2 rounded-lg text-sm outline-none resize-none" style={inp}
-              placeholder="Observações..." />
+              placeholder="Observações, briefing ou roteiro..." />
           </div>
+
+          {/* Modal de notes expandido */}
+          {showNotesModal && (
+            <div className="fixed inset-0 z-[60] flex items-center justify-center p-4"
+              style={{ background: 'rgba(0,0,0,0.75)' }}
+              onClick={() => setShowNotesModal(false)}>
+              <div className="rounded-2xl w-full max-w-2xl flex flex-col"
+                style={{ background: 'var(--surface)', border: '1px solid var(--border)', maxHeight: '80vh' }}
+                onClick={e => e.stopPropagation()}>
+                <div className="px-5 py-4 border-b flex items-center justify-between shrink-0" style={{ borderColor: 'var(--border)' }}>
+                  <h3 className="font-semibold text-white">Notas / Briefing</h3>
+                  <button onClick={() => setShowNotesModal(false)} style={{ color: 'var(--text-muted)' }}>✕</button>
+                </div>
+                <textarea value={notes} onChange={e => setNotes(e.target.value)}
+                  className="flex-1 px-5 py-4 text-sm outline-none resize-none text-white min-h-64"
+                  style={{ background: 'transparent' }}
+                  placeholder="Observações, briefing ou roteiro..." />
+                <div className="px-5 py-3 border-t shrink-0 flex justify-end" style={{ borderColor: 'var(--border)' }}>
+                  <button onClick={() => setShowNotesModal(false)}
+                    className="px-4 py-2 rounded-lg text-sm font-semibold text-white"
+                    style={{ background: 'var(--accent)' }}>
+                    Fechar
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Histórico de revisões — somente leitura */}
           {post.approval_notes_history && post.approval_notes_history.length > 0 && (
@@ -426,13 +463,17 @@ function PostModal({ post, clients, profiles, onClose, onSave, userRole }: {
             </div>
           )}
 
-          {/* Legenda, CTA e Hashtags — Social Media / Admin */}
-          {(userRole === 'social_media' || userRole === 'admin' || !userRole) && (
+          {/* Legenda, CTA e Hashtags — Social Media / Admin (read-only p/ designer/editor) */}
+          {(userRole === 'social_media' || userRole === 'admin' || userRole === 'designer' || userRole === 'editor' || !userRole) && (
             <>
               <div>
                 <p className="text-xs mb-1.5" style={{ color: 'var(--text-muted)' }}>Legenda</p>
-                <textarea value={caption} onChange={e => setCaption(e.target.value)} rows={3}
-                  className="w-full px-3 py-2 rounded-lg text-sm outline-none resize-none" style={inp}
+                <textarea value={caption}
+                  onChange={e => (userRole === 'social_media' || userRole === 'admin' || !userRole) ? setCaption(e.target.value) : undefined}
+                  readOnly={userRole === 'designer' || userRole === 'editor'}
+                  rows={3}
+                  className="w-full px-3 py-2 rounded-lg text-sm outline-none resize-none"
+                  style={{ ...inp, opacity: (userRole === 'designer' || userRole === 'editor') ? 0.75 : 1 }}
                   placeholder="Texto da legenda do post..." />
               </div>
               <div>
@@ -670,6 +711,11 @@ function PostCard({ post, clients, profiles, onClick }: {
       )}
       {post.publish_date && (
         <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Publicar até {fmtShort(post.publish_date)}</p>
+      )}
+      {post.notes && (
+        <p className="text-xs truncate" style={{ color: 'var(--text-muted)' }}>
+          📄 {post.notes.slice(0, 80)}{post.notes.length > 80 ? '…' : ''}
+        </p>
       )}
       {post.approval_notes && (
         <div className="rounded-lg px-2.5 py-2" style={{ background: '#f9731610', border: '1px solid #f9731630' }}>

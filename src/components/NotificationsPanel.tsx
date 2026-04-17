@@ -130,7 +130,7 @@ export default function NotificationsPanel({ openUp = false }: { openUp?: boolea
 
       {/* Dropdown */}
       {open && (
-        <div className={`absolute right-0 w-80 rounded-xl shadow-2xl z-50 overflow-hidden ${openUp ? 'bottom-11' : 'top-11'}`}
+        <div className={`absolute w-80 rounded-xl shadow-2xl z-50 overflow-hidden ${openUp ? 'bottom-11 left-0' : 'top-11 right-0'}`}
           style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
           <div className="flex items-center justify-between px-4 py-3 border-b" style={{ borderColor: 'var(--border)' }}>
             <h3 className="text-sm font-semibold" style={{ color: 'var(--cream)' }}>Notificações</h3>

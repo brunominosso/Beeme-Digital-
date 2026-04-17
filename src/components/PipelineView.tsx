@@ -166,10 +166,10 @@ export default function PipelineView({
               fontSize: '1.6rem', fontFamily: 'var(--font-barlow)',
               color: isUrgent ? '#f87171' : 'var(--cream)',
             }}>
-              {diasAte25}/25
+              {isUrgent ? '⚠' : '📅'} {diasAte25}d
             </p>
             <p className="label-caps mt-0.5" style={{ color: isUrgent ? '#f87171' : 'var(--text-muted)' }}>
-              {isUrgent ? '⚠ urgente' : 'dias p/ dia 25'}
+              {isUrgent ? 'urgente · obj. dia 25' : 'até o dia 25'}
             </p>
           </div>
 

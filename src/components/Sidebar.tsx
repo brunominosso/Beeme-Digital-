@@ -19,7 +19,7 @@ const NAV: NavGroup[] = [
     { href: '/leads',      label: 'Leads & Clientes', icon: '👥', exact: false, roles: ['admin','gestor','social_media','designer','editor','financeiro'] },
     { href: '/conteudos',  label: 'Conteúdos',        icon: '🎨', exact: false, roles: ['admin','social_media','designer','editor'] },
     { href: '/kanban',     label: 'Tarefas',           icon: '📋', exact: false, roles: ['admin','gestor','social_media','designer','editor'] },
-    { href: '/pipeline',   label: 'Pipeline',             icon: '📊', exact: false, roles: ['admin','gestor','social_media'] },
+    { href: '/pipeline',   label: 'Pipeline',             icon: '📊', exact: false, roles: ['admin','gestor','social_media','designer','editor'] },
     { href: '/pautas',     label: 'Pautas',              icon: '📆', exact: false, roles: ['admin','gestor','social_media','designer'] },
     { href: '/meetings',   label: 'Reuniões',           icon: '📅', exact: false, roles: ['admin','gestor','social_media'] },
     { href: '/goals',      label: 'Metas & OKR',        icon: '🎯', exact: false, roles: ['admin','gestor'] },
