@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect, useCallback } from 'react'
+import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import type { Pauta, Client, Profile, ProducaoMensal } from '@/types/database'
 
@@ -103,8 +104,17 @@ interface Props {
 }
 
 export default function PautasView({ initialPautas, clients, profiles, producao: initialProducao = [], refMonthStr, userRole, currentUserId }: Props) {
+  const router = useRouter()
   const [pautas, setPautas] = useState<Pauta[]>(initialPautas)
   const [producao, setProducao] = useState<ProducaoMensal[]>(initialProducao)
+
+  const refresh = useCallback(() => router.refresh(), [router])
+
+  // Auto-refresh a cada 60 segundos para ver pautas criadas por outros utilizadores
+  useEffect(() => {
+    const interval = setInterval(refresh, 60_000)
+    return () => clearInterval(interval)
+  }, [refresh])
   const [weekRef, setWeekRef] = useState<Date>(new Date())
   const [showForm, setShowForm] = useState(false)
   const [selected, setSelected] = useState<Pauta | null>(null)
@@ -338,6 +348,12 @@ export default function PautasView({ initialPautas, clients, profiles, producao:
               </span>
             )}
           </div>
+
+          <button onClick={refresh} title="Atualizar"
+            className="w-7 h-7 flex items-center justify-center rounded-lg text-sm shrink-0"
+            style={{ background: 'var(--surface-2)', color: 'var(--text-muted)' }}>
+            ↻
+          </button>
 
           {canEdit && (
             <button

@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect, useCallback } from 'react'
+import { useRouter } from 'next/navigation'
 import type { Client, Profile, ProducaoMensal } from '@/types/database'
 
 // ── Etapas do pipeline ────────────────────────────────────────
@@ -69,8 +70,24 @@ export default function PipelineView({
   producao,
   refMonthStr,
 }: Props) {
+  const router = useRouter()
   const [records] = useState<ProducaoMensal[]>(producao)
   const [viewMonth, setViewMonth] = useState(refMonthStr)
+  const [refreshing, setRefreshing] = useState(false)
+  const [lastRefresh, setLastRefresh] = useState(new Date())
+
+  const refresh = useCallback(async () => {
+    setRefreshing(true)
+    router.refresh()
+    setLastRefresh(new Date())
+    setTimeout(() => setRefreshing(false), 1200)
+  }, [router])
+
+  // Auto-refresh a cada 60 segundos
+  useEffect(() => {
+    const interval = setInterval(refresh, 60_000)
+    return () => clearInterval(interval)
+  }, [refresh])
 
   // Index de records por clientId+etapa+mes para acesso rápido
   const recordIndex = useMemo(() => {
@@ -134,6 +151,11 @@ export default function PipelineView({
             <button onClick={() => shiftMonth(1)}
               className="w-7 h-7 flex items-center justify-center rounded-lg text-sm"
               style={{ background: 'var(--surface-2)', color: 'var(--text-muted)' }}>›</button>
+            <button onClick={refresh} disabled={refreshing} title={`Atualizado: ${lastRefresh.toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' })}`}
+              className="w-7 h-7 flex items-center justify-center rounded-lg text-sm transition-opacity disabled:opacity-50"
+              style={{ background: 'var(--surface-2)', color: 'var(--text-muted)' }}>
+              {refreshing ? '⏳' : '↻'}
+            </button>
           </div>
         </div>
 
