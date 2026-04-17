@@ -115,6 +115,10 @@ export default function PautasView({ initialPautas, clients, profiles, producao:
     const interval = setInterval(refresh, 60_000)
     return () => clearInterval(interval)
   }, [refresh])
+
+  // Sincroniza estado local com dados frescos do servidor após cada refresh
+  useEffect(() => { setPautas(initialPautas) }, [initialPautas])
+  useEffect(() => { setProducao(initialProducao) }, [initialProducao])
   const [weekRef, setWeekRef] = useState<Date>(new Date())
   const [showForm, setShowForm] = useState(false)
   const [selected, setSelected] = useState<Pauta | null>(null)
