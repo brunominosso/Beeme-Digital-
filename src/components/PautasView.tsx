@@ -473,7 +473,7 @@ export default function PautasView({ initialPautas, clients, profiles, producao:
                   cursor: canCreate ? 'pointer' : 'default',
                 }}>
                 {client.name}
-                {canCreate && <span className="opacity-50">+</span>}
+                {canCreate && <span className="font-bold ml-1" style={{ color: '#fb923c' }}>+</span>}
               </button>
             ))}
           </div>
