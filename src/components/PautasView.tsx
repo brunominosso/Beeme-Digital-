@@ -385,7 +385,7 @@ export default function PautasView({ initialPautas, clients, profiles, producao:
           <div className="flex-1 min-w-0">
             <h1 className="text-xl font-bold" style={{ color: 'var(--cream)' }}>Pautas da Equipa</h1>
             <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
-              Agenda semanal — Social Media e Designer
+              {userRole === 'captacao' ? 'O teu calendário de captações' : 'Agenda semanal — Social Media e Designer'}
             </p>
           </div>
 
@@ -533,9 +533,9 @@ export default function PautasView({ initialPautas, clients, profiles, producao:
             )}
           </div>
 
-          {/* Filtro por role */}
+          {/* Filtro por role — oculto para captacao */}
           <div className="flex gap-1 ml-auto">
-            {([
+            {userRole === 'captacao' ? null : ([
               { key: 'todos', label: 'Todos' },
               { key: 'social_media', label: 'Social Media' },
               { key: 'designer', label: 'Designer' },
@@ -621,7 +621,7 @@ export default function PautasView({ initialPautas, clients, profiles, producao:
                                 {person.name?.split(' ')[0] ?? '—'}
                               </p>
                               <p className="text-xs" style={{ color: 'var(--text-dim)', fontSize: '0.65rem' }}>
-                                {person.role === 'social_media' ? 'Social Media' : 'Designer'}
+                                {person.role === 'social_media' ? 'Social Media' : person.role === 'captacao' ? 'Captação' : 'Designer'}
                               </p>
                             </div>
                           </div>
