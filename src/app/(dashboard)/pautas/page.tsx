@@ -42,7 +42,7 @@ export default async function PautasPage() {
   // Clientes com SM ou Designer como responsável
   // Fallback para todos os ativos se nenhum tiver responsible_ids configurado
   const teamIds = (rawProfiles ?? [])
-    .filter((p: any) => p.role === 'social_media' || p.role === 'designer')
+    .filter((p: any) => p.role === 'social_media' || p.role === 'designer' || p.role === 'captacao')
     .map((p: any) => p.id)
 
   const filteredByTeam = (rawClients ?? []).filter((c: any) =>
