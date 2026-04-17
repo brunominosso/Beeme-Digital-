@@ -177,6 +177,25 @@ export default function PautasView({ initialPautas, clients, profiles, producao:
   }, [clients, producao, pautas, weekRef])
 
   const canCreate = userRole === 'admin' || userRole === 'social_media'
+
+  // Clientes de captação sem pauta agendada no mês visualizado
+  const captacaoPendentes = useMemo(() => {
+    const viewMonthStart = new Date(weekRef.getFullYear(), weekRef.getMonth(), 1).toISOString().split('T')[0]
+    const viewMonthEnd   = new Date(weekRef.getFullYear(), weekRef.getMonth() + 1, 0).toISOString().split('T')[0]
+    return captacaoTeam.flatMap(person =>
+      clients
+        .filter(c => (c.responsible_ids ?? []).includes(person.id))
+        .filter(c => !pautas.some(p =>
+          p.client_id === c.id &&
+          p.assignee_id === person.id &&
+          p.tipo === 'captacao' &&
+          (p.status === 'pendente' || p.status === 'em_andamento') &&
+          p.data >= viewMonthStart &&
+          p.data <= viewMonthEnd
+        ))
+        .map(c => ({ client: c, person }))
+    )
+  }, [captacaoTeam, clients, pautas, weekRef])
   const canEdit = canCreate  // alias para uso existente no formulário de criação
   const canEditDetail = (p: Pauta | null) =>
     canCreate || (userRole === 'designer' && p?.assignee_id === currentUserId)
@@ -424,6 +443,41 @@ export default function PautasView({ initialPautas, clients, profiles, producao:
             </button>
           )}
         </div>
+
+        {/* ── Barra captações pendentes (admin + captacao) ─── */}
+        {captacaoPendentes.length > 0 && (userRole === 'admin' || userRole === 'captacao') && (
+          <div className="border-b shrink-0 px-6 py-2.5 flex items-center gap-2 flex-wrap"
+            style={{ borderColor: 'var(--border)', background: '#fb923c06' }}>
+            <span className="text-xs font-semibold shrink-0" style={{ color: '#fb923c' }}>
+              📷 Captações em falta:
+            </span>
+            {captacaoPendentes.map(({ client, person }) => (
+              <button
+                key={`${client.id}-${person.id}`}
+                onClick={() => {
+                  if (!canCreate) return
+                  setFClient(client.id)
+                  setFTipo('captacao')
+                  setFAssignee(person.id)
+                  setFData(toDateStr(new Date()))
+                  setFTurno('manha')
+                  setFNotas('')
+                  setSaveError('')
+                  setShowForm(true)
+                }}
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium transition-all"
+                style={{
+                  background: '#fb923c12',
+                  border: '1px solid #fb923c50',
+                  color: '#fb923c',
+                  cursor: canCreate ? 'pointer' : 'default',
+                }}>
+                {client.name}
+                {canCreate && <span className="opacity-50">+</span>}
+              </button>
+            ))}
+          </div>
+        )}
 
         {/* ── Barra de pendências compacta ─────────────────── */}
         {pendencias.length > 0 && userRole !== 'captacao' && (
