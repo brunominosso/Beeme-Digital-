@@ -176,7 +176,7 @@ export default function PautasView({ initialPautas, clients, profiles, producao:
       .filter(x => x.faltam.length > 0)
   }, [clients, producao, pautas, weekRef])
 
-  const canCreate = userRole === 'admin' || userRole === 'social_media'
+  const canCreate = userRole === 'admin' || userRole === 'social_media' || userRole === 'captacao'
   const canEdit = canCreate  // alias para uso existente no formulário de criação
   const canEditDetail = (p: Pauta | null) =>
     canCreate || (userRole === 'designer' && p?.assignee_id === currentUserId)
@@ -1218,9 +1218,11 @@ export default function PautasView({ initialPautas, clients, profiles, producao:
                 <p className="label-caps mb-2">Tipo de trabalho *</p>
                 <div className="grid grid-cols-2 gap-1.5">
                   {Object.entries(TIPOS)
-                    .filter(([, cfg]) => {
+                    .filter(([key, cfg]) => {
+                      if (userRole === 'captacao') return key === 'captacao'
                       if (!fAssignee) return true
-                      const assigneeRole = team.find(p => p.id === fAssignee)?.role ?? ''
+                      const assigneeRole = [...team, ...captacaoTeam].find(p => p.id === fAssignee)?.role ?? ''
+                      if (assigneeRole === 'captacao') return key === 'captacao'
                       return cfg.roles.includes(assigneeRole)
                     })
                     .map(([key, cfg]) => (
