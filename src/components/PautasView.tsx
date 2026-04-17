@@ -1191,7 +1191,7 @@ export default function PautasView({ initialPautas, clients, profiles, producao:
               <div>
                 <p className="label-caps mb-2">Colaborador *</p>
                 <div className="flex gap-2 flex-wrap">
-                  {[...team, ...captacaoTeam].map(p => (
+                  {(userRole === 'captacao' ? captacaoTeam : userRole === 'admin' ? [...team, ...captacaoTeam] : team).map(p => (
                     <button key={p.id}
                       onClick={() => setFAssignee(p.id)}
                       className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-xs font-medium transition-all"
@@ -1206,7 +1206,7 @@ export default function PautasView({ initialPautas, clients, profiles, producao:
                       </div>
                       {p.name?.split(' ')[0]}
                       <span className="opacity-60">
-                        · {p.role === 'social_media' ? 'SM' : 'Design'}
+                        · {p.role === 'social_media' ? 'SM' : p.role === 'captacao' ? 'Captação' : 'Design'}
                       </span>
                     </button>
                   ))}
