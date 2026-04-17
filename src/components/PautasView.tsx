@@ -38,6 +38,7 @@ const TIPOS: Record<string, TipoConfig> = {
   edicao_cards:        { label: 'Edição de Cards',        color: '#2dd4bf18', border: '#2dd4bf40', dot: '#2dd4bf', roles: ['designer'] },
   edicao_video:        { label: 'Edição de Vídeos',       color: '#e879f918', border: '#e879f940', dot: '#e879f9', roles: ['designer'] },
   criacao_logo:        { label: 'Criação de Logomarca',   color: '#f59e0b18', border: '#f59e0b40', dot: '#f59e0b', roles: ['designer'] },
+  agendamento:         { label: 'Agendamento',             color: '#fbbf2418', border: '#fbbf2440', dot: '#fbbf24', roles: ['social_media'] },
   // ── Ambos ─────────────────────────────────────────────────
   outro:               { label: 'Outro',                  color: '#94a3b818', border: '#94a3b840', dot: '#94a3b8', roles: ['social_media', 'designer'] },
 }
