@@ -82,6 +82,29 @@ function formatWeekRange(days: Date[]): string {
   return `${start} – ${end}`
 }
 
+function formatMonthYear(d: Date): string {
+  return d.toLocaleDateString('pt-PT', { month: 'long', year: 'numeric' })
+}
+
+function getMonthWeeks(referenceDate: Date): Date[][] {
+  const year = referenceDate.getFullYear()
+  const month = referenceDate.getMonth()
+  const firstDay = new Date(year, month, 1)
+  const lastDay = new Date(year, month + 1, 0)
+  const startDate = new Date(firstDay)
+  const dow = firstDay.getDay()
+  startDate.setDate(firstDay.getDate() - (dow === 0 ? 6 : dow - 1))
+  const weeks: Date[][] = []
+  const cur = new Date(startDate)
+  while (cur <= lastDay || weeks.length < 4) {
+    const week: Date[] = []
+    for (let i = 0; i < 7; i++) { week.push(new Date(cur)); cur.setDate(cur.getDate() + 1) }
+    weeks.push(week)
+    if (cur > lastDay && weeks.length >= 4) break
+  }
+  return weeks
+}
+
 // ── Componente principal ──────────────────────────────────────
 
 // Etapas do pipeline com o tipo de pauta correspondente para criar
@@ -147,6 +170,9 @@ export default function PautasView({ initialPautas, clients, profiles, producao:
 
   // Painel de pendências
   const [expandedPendClient, setExpandedPendClient] = useState<string | null>(null)
+
+  // Vista
+  const [viewMode, setViewMode] = useState<'semana' | 'mes'>('semana')
 
   // Drag & drop
   const [draggingId, setDraggingId] = useState<string | null>(null)
@@ -231,6 +257,22 @@ export default function PautasView({ initialPautas, clients, profiles, producao:
     return idx
   }, [pautas])
 
+  // Index de pautas por data (para vista mensal)
+  const pautaByDate = useMemo(() => {
+    const idx: Record<string, Pauta[]> = {}
+    pautas.forEach(p => { if (!idx[p.data]) idx[p.data] = []; idx[p.data].push(p) })
+    return idx
+  }, [pautas])
+
+  // IDs visíveis na vista actual
+  const visibleTeamIds = useMemo(() => {
+    const ids = new Set(filteredTeam.map(p => p.id))
+    if (userRole === 'admin') captacaoTeam.forEach(p => ids.add(p.id))
+    return ids
+  }, [filteredTeam, captacaoTeam, userRole])
+
+  const monthWeeks = useMemo(() => getMonthWeeks(weekRef), [weekRef])
+
   function prevWeek() {
     const d = new Date(weekRef)
     d.setDate(d.getDate() - 7)
@@ -245,6 +287,14 @@ export default function PautasView({ initialPautas, clients, profiles, producao:
 
   function goToday() {
     setWeekRef(new Date())
+  }
+
+  function prevMonth() {
+    const d = new Date(weekRef); d.setMonth(d.getMonth() - 1); setWeekRef(d)
+  }
+
+  function nextMonth() {
+    const d = new Date(weekRef); d.setMonth(d.getMonth() + 1); setWeekRef(d)
   }
 
   function openCreate(data?: string, assigneeId?: string, turno?: string) {
@@ -559,32 +609,44 @@ export default function PautasView({ initialPautas, clients, profiles, producao:
           </div>
         )}
 
-        {/* Toolbar: navegação semana + filtro role */}
+        {/* Toolbar: navegação + toggle vista + filtro role */}
         <div className="px-6 py-3 border-b shrink-0 flex items-center gap-4"
           style={{ borderColor: 'var(--border)' }}>
 
-          {/* Navegação semana */}
+          {/* Navegação */}
           <div className="flex items-center gap-2">
-            <button onClick={prevWeek}
+            <button onClick={viewMode === 'mes' ? prevMonth : prevWeek}
               className="w-7 h-7 flex items-center justify-center rounded-lg text-sm transition-colors"
               style={{ background: 'var(--surface-2)', color: 'var(--text-muted)' }}>
               ‹
             </button>
             <span className="text-sm font-medium px-1" style={{ color: 'var(--cream)', minWidth: 160, textAlign: 'center' }}>
-              {formatWeekRange(weekDays)}
+              {viewMode === 'mes' ? formatMonthYear(weekRef) : formatWeekRange(weekDays)}
             </span>
-            <button onClick={nextWeek}
+            <button onClick={viewMode === 'mes' ? nextMonth : nextWeek}
               className="w-7 h-7 flex items-center justify-center rounded-lg text-sm transition-colors"
               style={{ background: 'var(--surface-2)', color: 'var(--text-muted)' }}>
               ›
             </button>
-            {!isCurrentWeek && (
-              <button onClick={goToday}
-                className="text-xs px-2.5 py-1 rounded-lg transition-colors"
-                style={{ background: 'var(--surface-2)', color: 'var(--accent)' }}>
-                Hoje
+            <button onClick={goToday}
+              className="text-xs px-2.5 py-1 rounded-lg transition-colors"
+              style={{ background: 'var(--surface-2)', color: 'var(--accent)' }}>
+              Hoje
+            </button>
+          </div>
+
+          {/* Toggle vista */}
+          <div className="flex gap-1">
+            {(['semana', 'mes'] as const).map(v => (
+              <button key={v} onClick={() => setViewMode(v)}
+                className="px-3 py-1 rounded-lg text-xs font-medium transition-all capitalize"
+                style={{
+                  background: viewMode === v ? 'var(--accent)' : 'var(--surface-2)',
+                  color: viewMode === v ? '#08080F' : 'var(--text-muted)',
+                }}>
+                {v === 'semana' ? 'Semana' : 'Mês'}
               </button>
-            )}
+            ))}
           </div>
 
           {/* Filtro por role — oculto para captacao */}
@@ -607,7 +669,93 @@ export default function PautasView({ initialPautas, clients, profiles, producao:
           </div>
         </div>
 
+        {/* ── Vista Mensal ──────────────────────────────────── */}
+        {viewMode === 'mes' && (
+          <div className="flex-1 overflow-auto p-4">
+            <table className="w-full border-collapse">
+              <thead>
+                <tr>
+                  {['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'].map(d => (
+                    <th key={d} className="px-2 py-2 text-center border-b"
+                      style={{ borderColor: 'var(--border)', color: 'var(--text-muted)', fontSize: '0.7rem', fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+                      {d}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {monthWeeks.map((week, wi) => (
+                  <tr key={wi}>
+                    {week.map(day => {
+                      const dateStr = toDateStr(day)
+                      const isCurrentMonth = day.getMonth() === weekRef.getMonth()
+                      const isToday = dateStr === todayStr
+                      const isWeekend = day.getDay() === 0 || day.getDay() === 6
+                      const dayPautas = (pautaByDate[dateStr] ?? []).filter(p => visibleTeamIds.has(p.assignee_id))
+                      return (
+                        <td key={dateStr}
+                          className="border align-top p-1.5"
+                          onClick={() => { if (isCurrentMonth && canCreate) openCreate(dateStr) }}
+                          style={{
+                            borderColor: 'var(--border)',
+                            background: isToday ? '#9FA4DB08' : isWeekend ? '#ffffff03' : 'transparent',
+                            minHeight: 100,
+                            width: '14.28%',
+                            cursor: isCurrentMonth && canCreate ? 'pointer' : 'default',
+                            opacity: isCurrentMonth ? 1 : 0.35,
+                          }}>
+                          {/* Dia */}
+                          <div className="flex items-center justify-end mb-1">
+                            <span className={`text-xs font-bold w-6 h-6 flex items-center justify-center rounded-full`}
+                              style={{
+                                background: isToday ? 'var(--lavanda)' : 'transparent',
+                                color: isToday ? '#08080F' : isCurrentMonth ? 'var(--cream)' : 'var(--text-dim)',
+                              }}>
+                              {day.getDate()}
+                            </span>
+                          </div>
+                          {/* Pautas */}
+                          <div className="flex flex-col gap-0.5">
+                            {dayPautas.slice(0, 4).map(pauta => {
+                              const cfg = TIPOS[pauta.tipo] ?? TIPOS.outro
+                              const person = profiles.find(p => p.id === pauta.assignee_id)
+                              const clientName = clients.find(c => c.id === pauta.client_id)?.name
+                              return (
+                                <button key={pauta.id}
+                                  onClick={e => { e.stopPropagation(); openDetail(pauta) }}
+                                  className="w-full text-left px-1.5 py-0.5 rounded text-xs truncate flex items-center gap-1 transition-all hover:opacity-80"
+                                  style={{ background: cfg.color, border: `1px solid ${cfg.border}` }}>
+                                  {person && (
+                                    <span className="w-3.5 h-3.5 rounded-full flex items-center justify-center shrink-0 font-bold"
+                                      style={{ background: person.avatar_color, color: '#08080F', fontSize: '0.5rem' }}>
+                                      {(person.name || '?')[0]}
+                                    </span>
+                                  )}
+                                  <span className="truncate" style={{ color: 'var(--cream)', fontSize: '0.65rem' }}>
+                                    {clientName ?? cfg.label}
+                                  </span>
+                                  {pauta.status === 'concluido' && <span className="ml-auto shrink-0 text-xs" style={{ color: '#4ade80' }}>✓</span>}
+                                </button>
+                              )
+                            })}
+                            {dayPautas.length > 4 && (
+                              <span className="text-xs px-1" style={{ color: 'var(--text-dim)', fontSize: '0.6rem' }}>
+                                +{dayPautas.length - 4} mais
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                      )
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
         {/* Grid semanal */}
+        {viewMode === 'semana' && (
         <div className="flex-1 overflow-auto">
           <table className="w-full border-collapse" style={{ minWidth: 800 }}>
             <thead>
@@ -913,6 +1061,7 @@ export default function PautasView({ initialPautas, clients, profiles, producao:
             </tbody>
           </table>
         </div>
+        )}
 
         {/* Legenda */}
         <div className="px-6 py-3 border-t shrink-0 flex items-center gap-3 flex-wrap"
