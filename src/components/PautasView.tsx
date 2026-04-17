@@ -956,8 +956,8 @@ export default function PautasView({ initialPautas, clients, profiles, producao:
               </button>
               <button onClick={deletePauta}
                 className="w-full py-1.5 rounded-lg text-xs transition-colors"
-                style={{ color: 'var(--danger)', background: 'var(--surface-2)' }}>
-                Eliminar pauta
+                style={{ color: 'var(--text-muted)', background: 'var(--surface-2)' }}>
+                ↩ Devolver às pendências
               </button>
             </div>
           )}
