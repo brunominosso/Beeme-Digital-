@@ -85,7 +85,8 @@ export default function PipelineView({
 
   // KPIs
   const kpis = useMemo(() => {
-    const monthRecords = records.filter(r => r.mes === viewMonth)
+    const clientIds = new Set(clients.map(c => c.id))
+    const monthRecords = records.filter(r => r.mes === viewMonth && clientIds.has(r.client_id))
     const totalCells = clients.length * ETAPAS.length
     const concluidos = monthRecords.filter(r => r.status === 'concluido').length
     const emAndamento = monthRecords.filter(r => r.status === 'em_andamento').length
