@@ -154,23 +154,12 @@ export default function PautasView({ initialPautas, clients, profiles, producao:
   // Pendências do pipeline por cliente
   // Mostra etapas que ainda não estão concluídas (exclui etapas automáticas)
   const pendencias = useMemo(() => {
-    const now = new Date()
-    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0]
-
     return clients
       .map(c => {
         const faltam = PIPELINE_ETAPAS.filter(e => {
           if (e.auto) return false
           const rec = producao.find(r => r.client_id === c.id && r.etapa === e.key)
-          if (rec?.status === 'concluido') return false
-          // Só pautas do mês atual em diante contam como "ativas" — pautas antigas e por fazer não devem esconder pendências
-          const hasActivePauta = pautas.some(p =>
-            p.client_id === c.id &&
-            p.tipo === e.pautaTipo &&
-            (p.status === 'pendente' || p.status === 'em_andamento') &&
-            p.data >= monthStart
-          )
-          return !hasActivePauta
+          return rec?.status !== 'concluido'
         })
         return { client: c, faltam }
       })
