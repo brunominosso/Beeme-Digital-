@@ -154,25 +154,26 @@ export default function PautasView({ initialPautas, clients, profiles, producao:
   // Pendências do pipeline por cliente
   // Mostra etapas que ainda não estão concluídas (exclui etapas automáticas)
   const pendencias = useMemo(() => {
-    const now = new Date()
-    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0]
+    const viewMonthStart = new Date(weekRef.getFullYear(), weekRef.getMonth(), 1).toISOString().split('T')[0]
+    const viewMonthEnd   = new Date(weekRef.getFullYear(), weekRef.getMonth() + 1, 0).toISOString().split('T')[0]
 
     return clients
       .map(c => {
         const faltam = PIPELINE_ETAPAS.filter(e => {
-          // Etapa está pendente se não existe pauta activa (pendente/em_andamento) deste mês em diante
+          // Etapa está pendente se não existe pauta activa no mês visualizado
           const hasActivePauta = pautas.some(p =>
             p.client_id === c.id &&
             p.tipo === e.pautaTipo &&
             (p.status === 'pendente' || p.status === 'em_andamento') &&
-            p.data >= monthStart
+            p.data >= viewMonthStart &&
+            p.data <= viewMonthEnd
           )
           return !hasActivePauta
         })
         return { client: c, faltam }
       })
       .filter(x => x.faltam.length > 0)
-  }, [clients, producao, pautas])
+  }, [clients, producao, pautas, weekRef])
 
   const canCreate = userRole === 'admin' || userRole === 'social_media'
   const canEdit = canCreate  // alias para uso existente no formulário de criação
