@@ -369,7 +369,7 @@ export default function PautasView({ initialPautas, clients, profiles, producao:
       <div className="flex-1 flex flex-col overflow-hidden">
 
         {/* Header */}
-        <div className="px-6 py-4 border-b shrink-0 flex items-center gap-4 flex-wrap"
+        <div className="px-6 py-4 border-b shrink-0 flex items-center gap-4 flex-wrap relative z-20"
           style={{ borderColor: 'var(--border)' }}>
 
           <div className="flex-1 min-w-0">
