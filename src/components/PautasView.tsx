@@ -183,16 +183,23 @@ export default function PautasView({ initialPautas, clients, profiles, producao:
 
   const weekDays = useMemo(() => getWeekDays(weekRef), [weekRef])
 
-  // Colaboradores relevantes (SM + Designer)
+  // Colaboradores equipa principal (SM + Designer)
   const team = useMemo(() =>
     profiles.filter(p => p.role === 'social_media' || p.role === 'designer'),
     [profiles]
   )
 
+  // Colaboradores captação (linha separada, só visível para admin)
+  const captacaoTeam = useMemo(() =>
+    profiles.filter(p => p.role === 'captacao'),
+    [profiles]
+  )
+
   const filteredTeam = useMemo(() => {
+    if (userRole === 'captacao') return profiles.filter(p => p.id === currentUserId)
     if (filterRole === 'todos') return team
     return team.filter(p => p.role === filterRole)
-  }, [team, filterRole])
+  }, [team, filterRole, userRole, currentUserId, profiles])
 
   // Index de pautas por data+assignee+turno para render rápido
   const pautaIndex = useMemo(() => {
@@ -419,7 +426,7 @@ export default function PautasView({ initialPautas, clients, profiles, producao:
         </div>
 
         {/* ── Barra de pendências compacta ─────────────────── */}
-        {pendencias.length > 0 && (
+        {pendencias.length > 0 && userRole !== 'captacao' && (
           <div className="border-b shrink-0 px-6 py-2.5 flex items-center gap-2 flex-wrap"
             style={{ borderColor: 'var(--border)', background: '#fbbf2406' }}>
 
@@ -726,13 +733,128 @@ export default function PautasView({ initialPautas, clients, profiles, producao:
                 })
               ))}
 
-              {filteredTeam.length === 0 && (
+              {filteredTeam.length === 0 && userRole !== 'captacao' && (
                 <tr>
                   <td colSpan={6} className="px-6 py-12 text-center"
                     style={{ color: 'var(--text-muted)' }}>
                     Nenhum colaborador encontrado para este filtro.
                   </td>
                 </tr>
+              )}
+
+              {/* ── Secção Captações (só admin) ─────────────── */}
+              {userRole === 'admin' && captacaoTeam.length > 0 && (
+                <>
+                  <tr>
+                    <td colSpan={6} className="px-3 py-2 border-t"
+                      style={{ borderColor: 'var(--border)', background: '#fb923c08' }}>
+                      <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: '#fb923c80' }}>
+                        Captações
+                      </span>
+                    </td>
+                  </tr>
+                  {captacaoTeam.map(person =>
+                    TURNOS.filter(t => t.key !== 'dia_todo').map((turno, ti) => {
+                      const isFirstRow = ti === 0
+                      return (
+                        <tr key={`${person.id}-${turno.key}`}
+                          style={{ borderBottom: !isFirstRow ? `1px solid var(--border)` : 'none' }}>
+                          <td className="sticky left-0 z-10 px-3 border-r align-top"
+                            style={{
+                              background: 'var(--surface)',
+                              borderColor: 'var(--border)',
+                              paddingTop: isFirstRow ? 12 : 4,
+                              paddingBottom: isFirstRow ? 0 : 12,
+                              verticalAlign: isFirstRow ? 'top' : 'bottom',
+                              borderBottom: !isFirstRow ? `1px solid var(--border)` : 'none',
+                              borderTop: isFirstRow ? `1px solid var(--border)` : 'none',
+                            }}>
+                            {isFirstRow ? (
+                              <div className="flex items-center gap-2">
+                                <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0"
+                                  style={{ background: person.avatar_color, color: '#08080F' }}>
+                                  {(person.name || '?')[0].toUpperCase()}
+                                </div>
+                                <div>
+                                  <p className="text-xs font-medium" style={{ color: 'var(--cream)' }}>
+                                    {person.name?.split(' ')[0] ?? '—'}
+                                  </p>
+                                  <p className="text-xs" style={{ color: '#fb923c80', fontSize: '0.65rem' }}>Captação</p>
+                                </div>
+                              </div>
+                            ) : (
+                              <p className="text-xs" style={{ color: 'var(--text-dim)', fontSize: '0.65rem' }}>{turno.label}</p>
+                            )}
+                            {isFirstRow && (
+                              <p className="text-xs mt-3" style={{ color: 'var(--text-dim)', fontSize: '0.65rem' }}>{turno.label}</p>
+                            )}
+                          </td>
+                          {weekDays.map(day => {
+                            const dateStr = toDateStr(day)
+                            const isToday = dateStr === todayStr
+                            const key = `${dateStr}__${person.id}__${turno.key}`
+                            const cellKey = key
+                            const cellPautas = pautaIndex[key] ?? []
+                            const diaKey = `${dateStr}__${person.id}__dia_todo`
+                            const diaPautas = isFirstRow ? (pautaIndex[diaKey] ?? []) : []
+                            const allCellPautas = [...cellPautas, ...diaPautas]
+                            const isDragOver = dragOverCell === cellKey
+                            return (
+                              <td key={dateStr}
+                                className="px-2 py-2 align-top border-r"
+                                onDragOver={e => { e.preventDefault(); setDragOverCell(cellKey) }}
+                                onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragOverCell(null) }}
+                                onDrop={e => {
+                                  e.preventDefault()
+                                  const id = e.dataTransfer.getData('pautaId')
+                                  if (id) movePauta(id, dateStr, person.id, turno.key)
+                                  setDraggingId(null); setDragOverCell(null)
+                                }}
+                                style={{
+                                  borderColor: 'var(--border)',
+                                  background: isDragOver ? '#fb923c15' : isToday ? '#fb923c05' : 'transparent',
+                                  borderTop: isFirstRow ? `1px solid var(--border)` : 'none',
+                                  borderBottom: !isFirstRow ? `1px solid var(--border)` : 'none',
+                                  minHeight: 80,
+                                  outline: isDragOver ? '2px dashed #fb923c60' : 'none',
+                                  outlineOffset: '-2px',
+                                }}>
+                                <div className="flex flex-col gap-1 min-h-[72px]">
+                                  {allCellPautas.map(pauta => {
+                                    const cfg = TIPOS[pauta.tipo] ?? TIPOS.outro
+                                    const clientName = clients.find(c => c.id === pauta.client_id)?.name
+                                    return (
+                                      <button key={pauta.id}
+                                        onClick={() => openDetail(pauta)}
+                                        draggable
+                                        onDragStart={e => { e.dataTransfer.setData('pautaId', pauta.id); setDraggingId(pauta.id) }}
+                                        onDragEnd={() => { setDraggingId(null); setDragOverCell(null) }}
+                                        className="w-full text-left px-2 py-1.5 rounded-lg text-xs transition-all hover:opacity-90"
+                                        style={{ background: cfg.color, border: `1px solid ${cfg.border}`, opacity: draggingId === pauta.id ? 0.4 : 1, cursor: 'grab' }}>
+                                        <div className="flex items-center gap-1 mb-0.5">
+                                          <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: cfg.dot }} />
+                                          <span className="font-medium truncate" style={{ color: 'var(--cream)' }}>{cfg.label}</span>
+                                          {pauta.status === 'concluido' && <span className="ml-auto text-xs" style={{ color: '#4ade80' }}>✓</span>}
+                                        </div>
+                                        {clientName && <p className="truncate" style={{ color: 'var(--text-muted)', fontSize: '0.65rem' }}>{clientName}</p>}
+                                      </button>
+                                    )
+                                  })}
+                                  <button
+                                    onClick={() => openCreate(dateStr, person.id, turno.key)}
+                                    className="w-full flex items-center justify-center h-7 rounded-lg text-xs opacity-0 hover:opacity-100 transition-all border border-dashed"
+                                    style={{ borderColor: 'var(--border)', color: 'var(--text-dim)' }}>
+                                    +
+                                  </button>
+                                </div>
+                              </td>
+                            )
+                          })}
+                        </tr>
+                      )
+                    })
+                  )}
+                </>
               )}
             </tbody>
           </table>

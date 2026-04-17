@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { redirect } from 'next/navigation'
 import HomeDashboard from '@/components/HomeDashboard'
 import HomeDesigner from '@/components/HomeDesigner'
 import HomeSocialMedia from '@/components/HomeSocialMedia'
@@ -100,6 +101,8 @@ export default async function DashboardPage() {
   )
 
   switch (activeProfile.role) {
+    case 'captacao':
+      redirect('/pautas')
     case 'designer':
       return <>{mobileView}<div className="hidden md:block"><HomeDesigner {...sharedProps} myPosts={myPosts} allClients={allClients} /></div></>
     case 'social_media':
