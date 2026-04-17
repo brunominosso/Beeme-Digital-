@@ -133,10 +133,19 @@ export default function PautasView({ initialPautas, clients, profiles, producao:
   // Edit state
   const [editStatus, setEditStatus] = useState('')
   const [editNotas, setEditNotas] = useState('')
+  const [editTipo, setEditTipo] = useState('')
+  const [editData, setEditData] = useState('')
+  const [editTurno, setEditTurno] = useState('')
+  const [editClientId, setEditClientId] = useState('')
+  const [editAssigneeId, setEditAssigneeId] = useState('')
   const [editingSave, setEditingSave] = useState(false)
 
   // Painel de pendências
   const [expandedPendClient, setExpandedPendClient] = useState<string | null>(null)
+
+  // Drag & drop
+  const [draggingId, setDraggingId] = useState<string | null>(null)
+  const [dragOverCell, setDragOverCell] = useState<string | null>(null)
 
   // Pendências do pipeline por cliente
   // Mostra etapas que ainda não estão concluídas (exclui etapas automáticas)
@@ -144,16 +153,26 @@ export default function PautasView({ initialPautas, clients, profiles, producao:
     return clients
       .map(c => {
         const faltam = PIPELINE_ETAPAS.filter(e => {
-          if (e.auto) return false // etapas automáticas não aparecem no banner
+          if (e.auto) return false
           const rec = producao.find(r => r.client_id === c.id && r.etapa === e.key)
-          return !rec || rec.status !== 'concluido'
+          if (rec?.status === 'concluido') return false
+          // Se já existe pauta activa (pendente ou em andamento) para este tipo, não mostrar
+          const hasActivePauta = pautas.some(p =>
+            p.client_id === c.id &&
+            p.tipo === e.pautaTipo &&
+            (p.status === 'pendente' || p.status === 'em_andamento')
+          )
+          return !hasActivePauta
         })
         return { client: c, faltam }
       })
       .filter(x => x.faltam.length > 0)
-  }, [clients, producao])
+  }, [clients, producao, pautas])
 
-  const canEdit = userRole === 'admin' || userRole === 'gestor' || userRole === 'social_media'
+  const canCreate = userRole === 'admin' || userRole === 'social_media'
+  const canEdit = canCreate  // alias para uso existente no formulário de criação
+  const canEditDetail = (p: Pauta | null) =>
+    canCreate || (userRole === 'designer' && p?.assignee_id === currentUserId)
 
   const weekDays = useMemo(() => getWeekDays(weekRef), [weekRef])
 
@@ -232,10 +251,23 @@ export default function PautasView({ initialPautas, clients, profiles, producao:
     setSaving(false)
   }
 
+  async function movePauta(pautaId: string, newData: string, newAssigneeId: string, newTurno: string) {
+    const pauta = pautas.find(p => p.id === pautaId)
+    if (!pauta || (pauta.data === newData && pauta.assignee_id === newAssigneeId && pauta.turno === newTurno)) return
+    setPautas(prev => prev.map(p => p.id === pautaId ? { ...p, data: newData, assignee_id: newAssigneeId, turno: newTurno } : p))
+    const supabase = createClient()
+    await supabase.from('pautas').update({ data: newData, assignee_id: newAssigneeId, turno: newTurno, updated_at: new Date().toISOString() }).eq('id', pautaId)
+  }
+
   function openDetail(pauta: Pauta) {
     setSelected(pauta)
     setEditStatus(pauta.status)
     setEditNotas(pauta.notas ?? '')
+    setEditTipo(pauta.tipo)
+    setEditData(pauta.data)
+    setEditTurno(pauta.turno)
+    setEditClientId(pauta.client_id ?? '')
+    setEditAssigneeId(pauta.assignee_id)
   }
 
   async function saveDetail() {
@@ -247,6 +279,11 @@ export default function PautasView({ initialPautas, clients, profiles, producao:
     await supabase.from('pautas').update({
       status: editStatus,
       notas: editNotas || null,
+      tipo: editTipo,
+      data: editData,
+      turno: editTurno,
+      client_id: editClientId || null,
+      assignee_id: editAssigneeId,
       updated_at: new Date().toISOString(),
     }).eq('id', selected.id)
 
@@ -286,7 +323,16 @@ export default function PautasView({ initialPautas, clients, profiles, producao:
       }
     }
 
-    const updated = { ...selected, status: editStatus as Pauta['status'], notas: editNotas || null }
+    const updated = {
+      ...selected,
+      status: editStatus as Pauta['status'],
+      notas: editNotas || null,
+      tipo: editTipo,
+      data: editData,
+      turno: editTurno,
+      client_id: editClientId || null,
+      assignee_id: editAssigneeId,
+    }
     setPautas(prev => prev.map(p => p.id === selected.id ? updated : p))
     setSelected(updated)
     setEditingSave(false)
@@ -590,16 +636,28 @@ export default function PautasView({ initialPautas, clients, profiles, producao:
 
                         const allCellPautas = [...cellPautas, ...diaPautas]
 
+                        const cellKey = `${dateStr}__${person.id}__${turno.key}`
+                        const isDragOver = dragOverCell === cellKey
                         return (
                           <td key={dateStr}
                             className="px-2 py-2 align-top border-r"
+                            onDragOver={e => { e.preventDefault(); setDragOverCell(cellKey) }}
+                            onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragOverCell(null) }}
+                            onDrop={e => {
+                              e.preventDefault()
+                              const id = e.dataTransfer.getData('pautaId')
+                              if (id) movePauta(id, dateStr, person.id, turno.key)
+                              setDraggingId(null); setDragOverCell(null)
+                            }}
                             style={{
                               borderColor: 'var(--border)',
-                              background: isToday ? '#9FA4DB05' : 'transparent',
+                              background: isDragOver ? '#9FA4DB15' : isToday ? '#9FA4DB05' : 'transparent',
                               borderTop: isFirstRow ? `1px solid var(--border)` : 'none',
                               borderBottom: !isFirstRow ? `1px solid var(--border)` : 'none',
                               minHeight: 80,
                               verticalAlign: 'top',
+                              outline: isDragOver ? '2px dashed #9FA4DB60' : 'none',
+                              outlineOffset: '-2px',
                             }}>
 
                             <div className="flex flex-col gap-1 min-h-[72px]">
@@ -610,8 +668,11 @@ export default function PautasView({ initialPautas, clients, profiles, producao:
                                 return (
                                   <button key={pauta.id}
                                     onClick={() => openDetail(pauta)}
+                                    draggable
+                                    onDragStart={e => { e.dataTransfer.setData('pautaId', pauta.id); setDraggingId(pauta.id) }}
+                                    onDragEnd={() => { setDraggingId(null); setDragOverCell(null) }}
                                     className="w-full text-left px-2 py-1.5 rounded-lg text-xs transition-all hover:opacity-90"
-                                    style={{ background: cfg.color, border: `1px solid ${cfg.border}` }}>
+                                    style={{ background: cfg.color, border: `1px solid ${cfg.border}`, opacity: draggingId === pauta.id ? 0.4 : 1, cursor: 'grab' }}>
                                     <div className="flex items-center gap-1 mb-0.5">
                                       <span className="w-1.5 h-1.5 rounded-full shrink-0"
                                         style={{ background: cfg.dot }} />
@@ -696,22 +757,65 @@ export default function PautasView({ initialPautas, clients, profiles, producao:
 
           <div className="flex-1 px-5 py-5 space-y-5">
             {/* Tipo */}
-            {(() => {
-              const cfg = TIPOS[selected.tipo] ?? TIPOS.outro
-              return (
-                <div className="px-3 py-2.5 rounded-xl flex items-center gap-2.5"
-                  style={{ background: cfg.color, border: `1px solid ${cfg.border}` }}>
-                  <span className="w-3 h-3 rounded-full shrink-0" style={{ background: cfg.dot }} />
-                  <span className="font-semibold text-sm" style={{ color: 'var(--cream)' }}>{cfg.label}</span>
+            <div>
+              <p className="label-caps mb-2">Tipo</p>
+              {canEditDetail(selected) ? (
+                <div className="flex flex-col gap-1">
+                  {Object.entries(TIPOS)
+                    .filter(([, cfg]) => {
+                      const assigneeRole = team.find(p => p.id === editAssigneeId)?.role ?? ''
+                      return !assigneeRole || cfg.roles.includes(assigneeRole)
+                    })
+                    .map(([key, cfg]) => (
+                      <button key={key}
+                        onClick={() => setEditTipo(key)}
+                        className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs text-left transition-all"
+                        style={{
+                          background: editTipo === key ? cfg.color : 'var(--surface-2)',
+                          border: `1px solid ${editTipo === key ? cfg.border : 'var(--border)'}`,
+                          color: editTipo === key ? 'var(--cream)' : 'var(--text-muted)',
+                        }}>
+                        <span className="w-2 h-2 rounded-full shrink-0" style={{ background: cfg.dot }} />
+                        {cfg.label}
+                      </button>
+                    ))}
                 </div>
-              )
-            })()}
+              ) : (() => {
+                const cfg = TIPOS[selected.tipo] ?? TIPOS.outro
+                return (
+                  <div className="px-3 py-2.5 rounded-xl flex items-center gap-2.5"
+                    style={{ background: cfg.color, border: `1px solid ${cfg.border}` }}>
+                    <span className="w-3 h-3 rounded-full shrink-0" style={{ background: cfg.dot }} />
+                    <span className="font-semibold text-sm" style={{ color: 'var(--cream)' }}>{cfg.label}</span>
+                  </div>
+                )
+              })()}
+            </div>
 
             {/* Info */}
             <div className="space-y-3">
               <div>
                 <p className="label-caps mb-1">Colaborador</p>
-                {(() => {
+                {canEditDetail(selected) ? (
+                  <div className="flex flex-wrap gap-1.5">
+                    {team.map(p => (
+                      <button key={p.id}
+                        onClick={() => setEditAssigneeId(p.id)}
+                        className="flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium transition-all"
+                        style={{
+                          background: editAssigneeId === p.id ? p.avatar_color + '25' : 'var(--surface-2)',
+                          border: `1px solid ${editAssigneeId === p.id ? p.avatar_color : 'var(--border)'}`,
+                          color: editAssigneeId === p.id ? p.avatar_color : 'var(--text-muted)',
+                        }}>
+                        <div className="w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold"
+                          style={{ background: editAssigneeId === p.id ? p.avatar_color : 'var(--border)', color: '#08080F' }}>
+                          {(p.name || '?')[0].toUpperCase()}
+                        </div>
+                        {p.name?.split(' ')[0]}
+                      </button>
+                    ))}
+                  </div>
+                ) : (() => {
                   const p = profiles.find(x => x.id === selected.assignee_id)
                   return p ? (
                     <div className="flex items-center gap-2">
@@ -727,32 +831,65 @@ export default function PautasView({ initialPautas, clients, profiles, producao:
 
               <div>
                 <p className="label-caps mb-1">Data</p>
-                <p className="text-sm" style={{ color: 'var(--cream)' }}>
-                  {new Date(selected.data + 'T12:00:00').toLocaleDateString('pt-PT', {
-                    weekday: 'long', day: 'numeric', month: 'long'
-                  })}
-                </p>
+                {canEditDetail(selected) ? (
+                  <input type="date" value={editData} onChange={e => setEditData(e.target.value)}
+                    className="w-full px-3 py-2 rounded-lg text-sm outline-none"
+                    style={{ background: 'var(--surface-2)', border: '1px solid var(--border)', color: 'var(--text)' }} />
+                ) : (
+                  <p className="text-sm" style={{ color: 'var(--cream)' }}>
+                    {new Date(selected.data + 'T12:00:00').toLocaleDateString('pt-PT', {
+                      weekday: 'long', day: 'numeric', month: 'long'
+                    })}
+                  </p>
+                )}
               </div>
 
               <div>
                 <p className="label-caps mb-1">Turno</p>
-                <p className="text-sm" style={{ color: 'var(--cream)' }}>
-                  {TURNOS.find(t => t.key === selected.turno)?.label ?? selected.turno}
-                </p>
+                {canEditDetail(selected) ? (
+                  <div className="flex gap-1.5">
+                    {TURNOS.map(t => (
+                      <button key={t.key}
+                        onClick={() => setEditTurno(t.key)}
+                        className="flex-1 py-1.5 rounded-lg text-xs font-medium transition-all"
+                        style={{
+                          background: editTurno === t.key ? 'var(--accent)' : 'var(--surface-2)',
+                          color: editTurno === t.key ? '#08080F' : 'var(--text-muted)',
+                        }}>
+                        {t.label}
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm" style={{ color: 'var(--cream)' }}>
+                    {TURNOS.find(t => t.key === selected.turno)?.label ?? selected.turno}
+                  </p>
+                )}
               </div>
 
-              {selected.client_id && (
-                <div>
-                  <p className="label-caps mb-1">Cliente</p>
+              <div>
+                <p className="label-caps mb-1">Cliente</p>
+                {canEditDetail(selected) ? (
+                  <select value={editClientId} onChange={e => setEditClientId(e.target.value)}
+                    className="w-full px-3 py-2 rounded-lg text-sm outline-none"
+                    style={{ background: 'var(--surface-2)', border: '1px solid var(--border)', color: 'var(--text)' }}>
+                    <option value="">Sem cliente</option>
+                    {clients.filter(c => c.status === 'ativo').map(c => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
+                ) : selected.client_id ? (
                   <p className="text-sm" style={{ color: 'var(--cream)' }}>
                     {clients.find(c => c.id === selected.client_id)?.name ?? '—'}
                   </p>
-                </div>
-              )}
+                ) : (
+                  <p className="text-sm" style={{ color: 'var(--text-dim)' }}>Sem cliente</p>
+                )}
+              </div>
             </div>
 
             {/* Status */}
-            {canEdit ? (
+            {canEditDetail(selected) ? (
               <div>
                 <p className="label-caps mb-2">Status</p>
                 <div className="flex flex-col gap-1.5">
@@ -788,7 +925,7 @@ export default function PautasView({ initialPautas, clients, profiles, producao:
             {/* Notas */}
             <div>
               <p className="label-caps mb-2">Notas</p>
-              {canEdit ? (
+              {canEditDetail(selected) ? (
                 <textarea
                   value={editNotas}
                   onChange={e => setEditNotas(e.target.value)}
@@ -806,7 +943,7 @@ export default function PautasView({ initialPautas, clients, profiles, producao:
           </div>
 
           {/* Footer ações */}
-          {canEdit && (
+          {canEditDetail(selected) && (
             <div className="px-5 py-4 border-t space-y-2" style={{ borderColor: 'var(--border)' }}>
               <button onClick={saveDetail} disabled={editingSave}
                 className="w-full py-2 rounded-lg text-sm font-semibold text-white disabled:opacity-40 transition-opacity"
