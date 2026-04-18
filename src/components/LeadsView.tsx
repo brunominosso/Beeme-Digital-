@@ -214,7 +214,7 @@ export default function LeadsView({
                   className="rounded-xl overflow-hidden cursor-grab active:cursor-grabbing hover:opacity-90 transition-opacity"
                   style={{ background: 'var(--surface)', border: '1px solid var(--border)', opacity: dragging === c.id ? 0.4 : 1 }}>
                   {/* Logo area */}
-                  <div className="h-28 flex items-center justify-center"
+                  <div className="h-20 md:h-28 flex items-center justify-center"
                     style={{ background: 'var(--surface-2)' }}>
                     {c.logo_url ? (
                       <img src={c.logo_url} alt={c.name} className="w-full h-full object-cover" />
@@ -250,8 +250,9 @@ export default function LeadsView({
 
       {/* New client modal */}
       {showNewForm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.7)' }}>
-          <div className="w-full max-w-sm rounded-xl p-6 space-y-4" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+        <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center md:p-4" style={{ background: 'rgba(0,0,0,0.7)' }}>
+          <div className="bottom-sheet w-full md:max-w-sm rounded-t-2xl md:rounded-xl p-5 md:p-6 space-y-4" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+            <div className="md:hidden w-10 h-1 rounded-full mx-auto -mt-1 mb-1" style={{ background: 'var(--border)' }} />
             <div className="flex items-center justify-between">
               <h2 className="font-semibold text-white">Novo cliente / lead</h2>
               <button onClick={() => setShowNewForm(false)} style={{ color: 'var(--text-muted)' }}>✕</button>

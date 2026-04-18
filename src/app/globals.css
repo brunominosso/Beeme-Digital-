@@ -78,6 +78,44 @@ input, textarea, select {
   font-size: 0.875rem;
 }
 
+/* ── Mobile touch ── */
+button, a, [role="button"], label {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Previne zoom no iOS ao focar inputs */
+@media (max-width: 767px) {
+  input, textarea, select {
+    font-size: 16px;
+  }
+}
+
+/* ── Kanban mobile — snap scroll por coluna ── */
+.kanban-board {
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.kanban-board::-webkit-scrollbar { display: none; }
+
+@media (max-width: 767px) {
+  .kanban-col {
+    scroll-snap-align: start;
+    min-width: calc(100vw - 24px) !important;
+    max-width: calc(100vw - 24px) !important;
+  }
+}
+
+/* ── Bottom sheet animation ── */
+@keyframes slideUp {
+  from { transform: translateY(100%); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+.bottom-sheet {
+  animation: slideUp 0.28s cubic-bezier(0.32, 0.72, 0, 1);
+}
+
 input[type="date"]::-webkit-calendar-picker-indicator,
 input[type="datetime-local"]::-webkit-calendar-picker-indicator {
   filter: invert(0.7);

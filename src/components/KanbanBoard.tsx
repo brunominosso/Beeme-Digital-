@@ -422,47 +422,82 @@ export default function KanbanBoard({
   return (
     <div className="flex flex-col h-screen">
       {/* Header */}
-      <div className="px-6 py-4 border-b flex items-center justify-between shrink-0" style={{ borderColor: 'var(--border)' }}>
+      <div className="px-4 md:px-6 py-3 md:py-4 border-b flex items-center justify-between shrink-0" style={{ borderColor: 'var(--border)' }}>
         <div>
-          <h1 className="text-xl font-bold text-white">{boardTitle}</h1>
-          <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>{headerStats}</p>
+          <h1 className="text-lg md:text-xl font-bold text-white">{boardTitle}</h1>
+          <p className="text-xs mt-0.5 hidden md:block" style={{ color: 'var(--text-muted)' }}>{headerStats}</p>
         </div>
         <div className="flex items-center gap-2">
           <button onClick={openTemplates}
-            className="px-3 py-2 rounded-lg text-sm font-semibold"
+            className="px-3 py-2 rounded-lg text-sm font-semibold hidden md:block"
             style={{ background: 'var(--surface-2)', color: 'var(--text-muted)', border: '1px solid var(--border)' }}>
             Modelos
           </button>
+          {/* Mobile: só ícone */}
+          <button onClick={openTemplates}
+            className="md:hidden w-9 h-9 rounded-lg flex items-center justify-center text-base"
+            style={{ background: 'var(--surface-2)', border: '1px solid var(--border)' }}
+            title="Modelos">
+            📋
+          </button>
           <button onClick={() => openNew(columns[0].id)}
-            className="px-4 py-2 rounded-lg text-sm font-semibold text-white"
+            className="hidden md:flex px-4 py-2 rounded-lg text-sm font-semibold text-white"
             style={{ background: 'var(--accent)' }}>
             + Nova tarefa
           </button>
         </div>
       </div>
 
-      {/* Filtro de data */}
-      <div className="px-6 py-3 border-b flex items-center gap-3 shrink-0" style={{ borderColor: 'var(--border)' }}>
-        <span className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>Filtrar por data:</span>
-        <input type="date" value={filterFrom} onChange={e => setFilterFrom(e.target.value)}
-          className="px-3 py-1.5 rounded-lg text-xs text-white outline-none"
-          style={{ background: 'var(--surface-2)', border: '1px solid var(--border)' }} />
-        <span className="text-xs" style={{ color: 'var(--text-muted)' }}>até</span>
-        <input type="date" value={filterTo} onChange={e => setFilterTo(e.target.value)}
-          className="px-3 py-1.5 rounded-lg text-xs text-white outline-none"
-          style={{ background: 'var(--surface-2)', border: '1px solid var(--border)' }} />
-        {(filterFrom || filterTo) && (
-          <button onClick={() => { setFilterFrom(''); setFilterTo('') }}
-            className="text-xs px-2.5 py-1 rounded-lg"
-            style={{ background: 'var(--surface-2)', color: 'var(--text-muted)' }}>
-            Limpar ✕
-          </button>
-        )}
+      {/* Filtro de data — desktop only, mobile usa botão compacto */}
+      <div className="border-b shrink-0" style={{ borderColor: 'var(--border)' }}>
+        {/* Desktop */}
+        <div className="hidden md:flex px-6 py-3 items-center gap-3">
+          <span className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>Filtrar por data:</span>
+          <input type="date" value={filterFrom} onChange={e => setFilterFrom(e.target.value)}
+            className="px-3 py-1.5 rounded-lg text-xs text-white outline-none"
+            style={{ background: 'var(--surface-2)', border: '1px solid var(--border)' }} />
+          <span className="text-xs" style={{ color: 'var(--text-muted)' }}>até</span>
+          <input type="date" value={filterTo} onChange={e => setFilterTo(e.target.value)}
+            className="px-3 py-1.5 rounded-lg text-xs text-white outline-none"
+            style={{ background: 'var(--surface-2)', border: '1px solid var(--border)' }} />
+          {(filterFrom || filterTo) && (
+            <button onClick={() => { setFilterFrom(''); setFilterTo('') }}
+              className="text-xs px-2.5 py-1 rounded-lg"
+              style={{ background: 'var(--surface-2)', color: 'var(--text-muted)' }}>
+              Limpar ✕
+            </button>
+          )}
+        </div>
+        {/* Mobile — tabs de coluna com scroll horizontal */}
+        <div className="md:hidden flex overflow-x-auto gap-0 px-2 py-2" style={{ scrollbarWidth: 'none' }}>
+          {columns.filter(c => !c.isDropZone).map((col, i) => {
+            const count = tasks.filter(t => col.displayStatuses.includes(t.status)).length
+            return (
+              <button key={col.id}
+                onClick={() => {
+                  const board = document.getElementById('kanban-board')
+                  const colEl = document.getElementById(`kanban-col-${col.id}`)
+                  if (board && colEl) board.scrollTo({ left: colEl.offsetLeft - 12, behavior: 'smooth' })
+                }}
+                className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all"
+                style={{
+                  background: 'var(--surface-2)',
+                  color: 'var(--text-muted)',
+                  border: `1px solid var(--border)`,
+                  marginRight: '6px',
+                }}>
+                <span className="w-2 h-2 rounded-full shrink-0" style={{ background: col.color }} />
+                {col.label}
+                {count > 0 && <span className="text-xs opacity-60">·{count}</span>}
+              </button>
+            )
+          })}
+        </div>
       </div>
 
       {/* Board */}
-      <div className="flex-1 overflow-x-auto p-3 md:p-6">
-        <div className="flex gap-4 h-full min-w-max">
+      <div id="kanban-board" className="kanban-board flex-1 overflow-x-auto p-3 md:p-6">
+        <div className="flex gap-3 md:gap-4 h-full min-w-max">
           {columns.map(col => {
             const colTasks = tasks.filter(t => {
               if (!col.displayStatuses.includes(t.status)) return false
@@ -483,8 +518,8 @@ export default function KanbanBoard({
 
             if (col.isDropZone) {
               return (
-                <div key={col.id}
-                  className="w-72 flex flex-col rounded-xl transition-all"
+                <div key={col.id} id={`kanban-col-${col.id}`}
+                  className="kanban-col w-72 flex flex-col rounded-xl transition-all"
                   style={{
                     background: isOver ? `${col.color}12` : 'transparent',
                     border: `2px dashed ${isOver ? col.color : 'var(--border)'}`,
@@ -509,8 +544,8 @@ export default function KanbanBoard({
             }
 
             return (
-              <div key={col.id}
-                className="w-72 flex flex-col rounded-xl"
+              <div key={col.id} id={`kanban-col-${col.id}`}
+                className="kanban-col w-72 flex flex-col rounded-xl"
                 style={{ background: 'var(--surface)', border: `1px solid ${isOver ? col.color : 'var(--border)'}` }}
                 onDragOver={e => { e.preventDefault(); setDragOver(col.id) }}
                 onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragOver(null) }}
@@ -638,11 +673,21 @@ export default function KanbanBoard({
         </div>
       </div>
 
+      {/* FAB — mobile only */}
+      <button
+        onClick={() => openNew(columns[0].id)}
+        className="md:hidden fixed bottom-20 right-4 z-30 w-14 h-14 rounded-full flex items-center justify-center text-2xl font-bold shadow-lg"
+        style={{ background: 'var(--accent)', color: '#08080F' }}>
+        +
+      </button>
+
       {/* Modal de tarefa */}
       {showForm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.7)' }}>
-          <div className="w-full max-w-md rounded-xl p-6 space-y-4 max-h-[90vh] overflow-y-auto"
+        <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center md:p-4" style={{ background: 'rgba(0,0,0,0.7)' }}>
+          <div className="bottom-sheet w-full md:max-w-md rounded-t-2xl md:rounded-xl p-5 md:p-6 space-y-4 max-h-[92vh] overflow-y-auto"
             style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+            {/* Handle bar — mobile */}
+            <div className="md:hidden w-10 h-1 rounded-full mx-auto -mt-1 mb-1" style={{ background: 'var(--border)' }} />
             <div className="flex items-center justify-between">
               <h2 className="font-semibold text-white">{editTask ? 'Editar tarefa' : 'Nova tarefa'}</h2>
               <button onClick={() => setShowForm(false)} style={{ color: 'var(--text-muted)' }}>✕</button>
@@ -895,9 +940,10 @@ export default function KanbanBoard({
 
       {/* Modal de modelos */}
       {showTemplates && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.7)' }}>
-          <div className="w-full max-w-md rounded-xl p-6 space-y-4 max-h-[80vh] flex flex-col"
+        <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center md:p-4" style={{ background: 'rgba(0,0,0,0.7)' }}>
+          <div className="bottom-sheet w-full md:max-w-md rounded-t-2xl md:rounded-xl p-5 md:p-6 space-y-4 max-h-[88vh] flex flex-col"
             style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+            <div className="md:hidden w-10 h-1 rounded-full mx-auto -mt-1 mb-1" style={{ background: 'var(--border)' }} />
             <div className="flex items-center justify-between shrink-0">
               <div>
                 <h2 className="font-semibold text-white">Modelos de tarefa</h2>
