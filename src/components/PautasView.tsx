@@ -184,7 +184,20 @@ export default function PautasView({ initialPautas, clients, profiles, producao:
     const viewMonthStart = new Date(weekRef.getFullYear(), weekRef.getMonth(), 1).toISOString().split('T')[0]
     const viewMonthEnd   = new Date(weekRef.getFullYear(), weekRef.getMonth() + 1, 0).toISOString().split('T')[0]
 
-    return clients
+    const captacaoIds = new Set(captacaoTeam.map(p => p.id))
+
+    // Filtra clientes relevantes para este utilizador:
+    // - Exclui clientes atribuídos exclusivamente a captação (esses aparecem na barra de captações)
+    // - Para não-admin, mostra apenas os clientes do próprio utilizador
+    const relevantClients = clients.filter(c => {
+      const responsible = c.responsible_ids ?? []
+      const nonCaptacaoResponsibles = responsible.filter(id => !captacaoIds.has(id))
+      if (responsible.length > 0 && nonCaptacaoResponsibles.length === 0) return false
+      if (userRole !== 'admin' && !responsible.includes(currentUserId)) return false
+      return true
+    })
+
+    return relevantClients
       .map(c => {
         const faltam = PIPELINE_ETAPAS.filter(e => {
           // Etapa está pendente se não existe pauta activa no mês visualizado
@@ -200,7 +213,7 @@ export default function PautasView({ initialPautas, clients, profiles, producao:
         return { client: c, faltam }
       })
       .filter(x => x.faltam.length > 0)
-  }, [clients, producao, pautas, weekRef])
+  }, [clients, producao, pautas, weekRef, captacaoTeam, userRole, currentUserId])
 
   const canCreate = userRole === 'admin' || userRole === 'social_media' || userRole === 'captacao'
   const canEdit = canCreate  // alias para uso existente no formulário de criação
@@ -371,34 +384,54 @@ export default function PautasView({ initialPautas, clients, profiles, producao:
     }).eq('id', selected.id)
 
     // ── Sync automático com o pipeline ──────────────────────
-    // Quando marcada como concluída, atualiza a etapa correspondente no pipeline
-    if (editStatus === 'concluido' && selected.client_id) {
-      const etapa = PAUTA_TO_PIPELINE[selected.tipo]
+    // Sincroniza SEMPRE que o status ou tipo mudar — não apenas quando concluído
+    const clientId = editClientId || selected.client_id
+    if (clientId) {
+      const tipoParaSync = editTipo  // usa o novo tipo
+      const etapa = PAUTA_TO_PIPELINE[tipoParaSync]
       if (etapa) {
-        // Mês de referência = próximo mês a partir da data da pauta
-        const pautaDate = new Date(selected.data + 'T12:00:00')
+        const pautaDate = new Date(editData + 'T12:00:00')
         const refMonth = new Date(pautaDate.getFullYear(), pautaDate.getMonth() + 1, 1)
         const pautaRefMonth = refMonth.toISOString().split('T')[0]
-        const novasNotas = `Auto: pauta "${TIPOS[selected.tipo]?.label ?? selected.tipo}" concluída`
+
+        // Determina o novo status do pipeline baseado no status da pauta
+        let pipelineStatus: string
+        let novasNotas: string
+        if (editStatus === 'concluido') {
+          pipelineStatus = 'concluido'
+          novasNotas = `Auto: pauta "${TIPOS[tipoParaSync]?.label ?? tipoParaSync}" concluída`
+        } else if (editStatus === 'cancelado') {
+          // Verifica se existe outra pauta ativa para este cliente+etapa no mesmo mês
+          const outraAtiva = pautas.some(p =>
+            p.id !== selected.id &&
+            p.client_id === clientId &&
+            p.tipo === tipoParaSync &&
+            p.status !== 'cancelado' &&
+            p.data >= pautaRefMonth.slice(0, 7) + '-01' &&
+            p.data <= pautaRefMonth.slice(0, 7) + '-31'
+          )
+          pipelineStatus = outraAtiva ? 'em_andamento' : 'pendente'
+          novasNotas = outraAtiva ? 'Auto: outra pauta activa' : 'Auto: pauta cancelada'
+        } else {
+          pipelineStatus = 'em_andamento'
+          novasNotas = `Auto: pauta agendada para ${editData}`
+        }
 
         const { data: upserted } = await supabase.from('producao_mensal').upsert({
-          client_id: selected.client_id,
+          client_id: clientId,
           mes: pautaRefMonth,
           etapa,
-          status: 'concluido',
+          status: pipelineStatus,
           updated_by: user?.id,
           notas: novasNotas,
           updated_at: new Date().toISOString(),
         }, { onConflict: 'client_id,mes,etapa' }).select().single()
 
-        // Atualiza estado local imediatamente — sem precisar recarregar a página
         if (upserted) {
           setProducao(prev => {
-            const idx = prev.findIndex(r => r.client_id === selected.client_id && r.etapa === etapa && r.mes === pautaRefMonth)
+            const idx = prev.findIndex(r => r.client_id === clientId && r.etapa === etapa && r.mes === pautaRefMonth)
             if (idx >= 0) {
-              const next = [...prev]
-              next[idx] = upserted as ProducaoMensal
-              return next
+              const next = [...prev]; next[idx] = upserted as ProducaoMensal; return next
             }
             return [...prev, upserted as ProducaoMensal]
           })
@@ -424,7 +457,37 @@ export default function PautasView({ initialPautas, clients, profiles, producao:
   async function deletePauta() {
     if (!selected) return
     const supabase = createClient()
+    const { data: { user } } = await supabase.auth.getUser()
     await supabase.from('pautas').delete().eq('id', selected.id)
+
+    // Reverte pipeline se não há outra pauta ativa para este cliente+etapa no mês
+    const clientId = selected.client_id
+    const etapa = PAUTA_TO_PIPELINE[selected.tipo]
+    if (clientId && etapa) {
+      const pautaDate = new Date(selected.data + 'T12:00:00')
+      const refMonth = new Date(pautaDate.getFullYear(), pautaDate.getMonth() + 1, 1)
+      const pautaRefMonth = refMonth.toISOString().split('T')[0]
+      const outraAtiva = pautas.some(p =>
+        p.id !== selected.id &&
+        p.client_id === clientId &&
+        p.tipo === selected.tipo &&
+        p.status !== 'cancelado' &&
+        p.data >= pautaRefMonth.slice(0, 7) + '-01' &&
+        p.data <= pautaRefMonth.slice(0, 7) + '-31'
+      )
+      const pipelineStatus = outraAtiva ? 'em_andamento' : 'pendente'
+      const notas = outraAtiva ? 'Auto: outra pauta activa' : 'Auto: pauta removida'
+      await supabase.from('producao_mensal').upsert({
+        client_id: clientId, mes: pautaRefMonth, etapa,
+        status: pipelineStatus, notas, updated_by: user?.id, updated_at: new Date().toISOString(),
+      }, { onConflict: 'client_id,mes,etapa' })
+      setProducao(prev => prev.map(r =>
+        r.client_id === clientId && r.etapa === etapa && r.mes === pautaRefMonth
+          ? { ...r, status: pipelineStatus, notas }
+          : r
+      ))
+    }
+
     setPautas(prev => prev.filter(p => p.id !== selected.id))
     setSelected(null)
   }
@@ -671,86 +734,108 @@ export default function PautasView({ initialPautas, clients, profiles, producao:
 
         {/* ── Vista Mensal ──────────────────────────────────── */}
         {viewMode === 'mes' && (
-          <div className="flex-1 overflow-auto p-4">
-            <table className="w-full border-collapse">
-              <thead>
-                <tr>
-                  {['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'].map(d => (
-                    <th key={d} className="px-2 py-2 text-center border-b"
-                      style={{ borderColor: 'var(--border)', color: 'var(--text-muted)', fontSize: '0.7rem', fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
-                      {d}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {monthWeeks.map((week, wi) => (
-                  <tr key={wi}>
-                    {week.map(day => {
-                      const dateStr = toDateStr(day)
-                      const isCurrentMonth = day.getMonth() === weekRef.getMonth()
-                      const isToday = dateStr === todayStr
-                      const isWeekend = day.getDay() === 0 || day.getDay() === 6
-                      const dayPautas = (pautaByDate[dateStr] ?? []).filter(p => visibleTeamIds.has(p.assignee_id))
-                      return (
-                        <td key={dateStr}
-                          className="border align-top p-1.5"
-                          onClick={() => { if (isCurrentMonth && canCreate) openCreate(dateStr) }}
+          <div className="flex-1 flex flex-col overflow-hidden px-4 pb-4 pt-3">
+            {/* Header dias da semana */}
+            <div className="grid grid-cols-7 mb-1 shrink-0">
+              {['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'].map((d, i) => (
+                <div key={d}
+                  className="text-center py-1.5"
+                  style={{
+                    color: i >= 5 ? '#ffffff30' : 'var(--text-muted)',
+                    fontSize: '0.68rem',
+                    fontWeight: 700,
+                    letterSpacing: '0.1em',
+                    textTransform: 'uppercase',
+                  }}>
+                  {d}
+                </div>
+              ))}
+            </div>
+            {/* Grade de semanas — ocupa todo o espaço restante */}
+            <div className="flex-1 grid grid-cols-7 gap-px overflow-hidden"
+              style={{
+                gridTemplateRows: `repeat(${monthWeeks.length}, 1fr)`,
+                background: 'var(--border)',
+                borderRadius: 12,
+                border: '1px solid var(--border)',
+              }}>
+              {monthWeeks.map((week, wi) =>
+                week.map(day => {
+                  const dateStr = toDateStr(day)
+                  const isCurrentMonth = day.getMonth() === weekRef.getMonth()
+                  const isToday = dateStr === todayStr
+                  const isWeekend = day.getDay() === 0 || day.getDay() === 6
+                  const dayPautas = (pautaByDate[dateStr] ?? []).filter(p => visibleTeamIds.has(p.assignee_id))
+                  return (
+                    <div key={`${wi}-${dateStr}`}
+                      onClick={() => { if (isCurrentMonth && canCreate) openCreate(dateStr) }}
+                      className="flex flex-col overflow-hidden group"
+                      style={{
+                        background: isToday ? '#9FA4DB0d' : isWeekend && isCurrentMonth ? '#ffffff04' : 'var(--surface)',
+                        cursor: isCurrentMonth && canCreate ? 'pointer' : 'default',
+                        opacity: isCurrentMonth ? 1 : 0.3,
+                        padding: '6px 8px',
+                        borderRadius: wi === 0 && day.getDay() === 1 ? '11px 0 0 0' :
+                          wi === 0 && day.getDay() === 0 ? '0 11px 0 0' :
+                          wi === monthWeeks.length - 1 && day.getDay() === 1 ? '0 0 0 11px' :
+                          wi === monthWeeks.length - 1 && day.getDay() === 0 ? '0 0 11px 0' : 0,
+                      }}>
+                      {/* Número do dia */}
+                      <div className="flex items-center justify-between mb-1 shrink-0">
+                        <span
+                          className="flex items-center justify-center font-semibold"
                           style={{
-                            borderColor: 'var(--border)',
-                            background: isToday ? '#9FA4DB08' : isWeekend ? '#ffffff03' : 'transparent',
-                            minHeight: 100,
-                            width: '14.28%',
-                            cursor: isCurrentMonth && canCreate ? 'pointer' : 'default',
-                            opacity: isCurrentMonth ? 1 : 0.35,
+                            width: 24, height: 24,
+                            borderRadius: '50%',
+                            fontSize: '0.75rem',
+                            background: isToday ? 'var(--lavanda)' : 'transparent',
+                            color: isToday ? '#08080F' : isCurrentMonth ? 'var(--cream)' : 'var(--text-dim)',
                           }}>
-                          {/* Dia */}
-                          <div className="flex items-center justify-end mb-1">
-                            <span className={`text-xs font-bold w-6 h-6 flex items-center justify-center rounded-full`}
-                              style={{
-                                background: isToday ? 'var(--lavanda)' : 'transparent',
-                                color: isToday ? '#08080F' : isCurrentMonth ? 'var(--cream)' : 'var(--text-dim)',
-                              }}>
-                              {day.getDate()}
-                            </span>
-                          </div>
-                          {/* Pautas */}
-                          <div className="flex flex-col gap-0.5">
-                            {dayPautas.slice(0, 4).map(pauta => {
-                              const cfg = TIPOS[pauta.tipo] ?? TIPOS.outro
-                              const person = profiles.find(p => p.id === pauta.assignee_id)
-                              const clientName = clients.find(c => c.id === pauta.client_id)?.name
-                              return (
-                                <button key={pauta.id}
-                                  onClick={e => { e.stopPropagation(); openDetail(pauta) }}
-                                  className="w-full text-left px-1.5 py-0.5 rounded text-xs truncate flex items-center gap-1 transition-all hover:opacity-80"
-                                  style={{ background: cfg.color, border: `1px solid ${cfg.border}` }}>
-                                  {person && (
-                                    <span className="w-3.5 h-3.5 rounded-full flex items-center justify-center shrink-0 font-bold"
-                                      style={{ background: person.avatar_color, color: '#08080F', fontSize: '0.5rem' }}>
-                                      {(person.name || '?')[0]}
-                                    </span>
-                                  )}
-                                  <span className="truncate" style={{ color: 'var(--cream)', fontSize: '0.65rem' }}>
-                                    {clientName ?? cfg.label}
-                                  </span>
-                                  {pauta.status === 'concluido' && <span className="ml-auto shrink-0 text-xs" style={{ color: '#4ade80' }}>✓</span>}
-                                </button>
-                              )
-                            })}
-                            {dayPautas.length > 4 && (
-                              <span className="text-xs px-1" style={{ color: 'var(--text-dim)', fontSize: '0.6rem' }}>
-                                +{dayPautas.length - 4} mais
+                          {day.getDate()}
+                        </span>
+                        {canCreate && isCurrentMonth && (
+                          <span className="opacity-0 group-hover:opacity-40 transition-opacity text-xs font-light"
+                            style={{ color: 'var(--text-muted)' }}>+</span>
+                        )}
+                      </div>
+                      {/* Pautas */}
+                      <div className="flex flex-col gap-0.5 overflow-hidden">
+                        {dayPautas.slice(0, 5).map(pauta => {
+                          const cfg = TIPOS[pauta.tipo] ?? TIPOS.outro
+                          const person = profiles.find(p => p.id === pauta.assignee_id)
+                          const clientName = clients.find(c => c.id === pauta.client_id)?.name
+                          return (
+                            <button key={pauta.id}
+                              onClick={e => { e.stopPropagation(); openDetail(pauta) }}
+                              className="w-full text-left px-1.5 py-0.5 rounded-md flex items-center gap-1 transition-all hover:brightness-125"
+                              style={{ background: cfg.color, border: `1px solid ${cfg.border}`, minWidth: 0 }}>
+                              {person && (
+                                <span className="w-3 h-3 rounded-full shrink-0 flex items-center justify-center font-bold"
+                                  style={{ background: person.avatar_color, color: '#08080F', fontSize: '0.45rem' }}>
+                                  {(person.name || '?')[0]}
+                                </span>
+                              )}
+                              <span className="truncate flex-1"
+                                style={{ color: 'var(--cream)', fontSize: '0.6rem', lineHeight: 1.3 }}>
+                                {clientName ?? cfg.label}
                               </span>
-                            )}
-                          </div>
-                        </td>
-                      )
-                    })}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                              {pauta.status === 'concluido' && (
+                                <span className="shrink-0" style={{ color: '#4ade80', fontSize: '0.55rem' }}>✓</span>
+                              )}
+                            </button>
+                          )
+                        })}
+                        {dayPautas.length > 5 && (
+                          <span className="px-1" style={{ color: 'var(--text-dim)', fontSize: '0.58rem' }}>
+                            +{dayPautas.length - 5}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })
+              )}
+            </div>
           </div>
         )}
 

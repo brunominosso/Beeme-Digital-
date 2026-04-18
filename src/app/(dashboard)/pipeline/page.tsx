@@ -25,8 +25,10 @@ export default async function PipelinePage() {
   const refMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1)
   const refMonthStr = refMonth.toISOString().split('T')[0]
   const currentMonthStr = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0]
-  const refStart = refMonthStr
-  const refEnd = new Date(refMonth.getFullYear(), refMonth.getMonth() + 1, 0).toISOString().split('T')[0]
+  // Pautas do mês ATUAL avançam o pipeline do PRÓXIMO mês
+  // Ex: pautas de abril → pipeline de maio
+  const refStart = currentMonthStr
+  const refEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0]
 
   const [
     { data: rawProfiles },
@@ -34,18 +36,17 @@ export default async function PipelinePage() {
     { data: rawProducao },
     { data: rawPautas },
     { data: rawPosts },
-    { data: rawClientPosts }, // posts em design_ajuste ou cliente_aprovacao (ciclo atual, sem filtro de data)
+    { data: rawClientPosts },
   ] = await Promise.all([
     supabase.from('profiles').select('id, name, role, avatar_color')
       .in('role', ['social_media', 'designer', 'admin', 'gestor']),
     supabase.from('clients').select('id, name, status, responsible_ids')
       .eq('status', 'ativo').order('name'),
     supabase.from('producao_mensal').select('*').in('mes', [refMonthStr, currentMonthStr]),
-    supabase.from('pautas').select('client_id, tipo, status')
+    supabase.from('pautas').select('id, client_id, tipo, status, data, assignee_id')
       .gte('data', refStart).lte('data', refEnd),
     supabase.from('posts').select('client_id, status, publish_date')
       .gte('publish_date', refStart).lte('publish_date', refEnd),
-    // Posts aguardando cliente ou em ajuste — sem filtro de data
     supabase.from('posts').select('client_id, status')
       .in('status', ['design_ajuste', 'cliente_aprovacao']),
   ])
@@ -59,8 +60,8 @@ export default async function PipelinePage() {
   )
 
   // ── Posts pendentes de cliente por tipo ──────────────────
-  const ajusteByClient: Record<string, number> = {}    // design_ajuste
-  const aguardandoByClient: Record<string, number> = {} // cliente_aprovacao
+  const ajusteByClient: Record<string, number> = {}
+  const aguardandoByClient: Record<string, number> = {}
   for (const post of (rawClientPosts ?? []) as any[]) {
     if (!post.client_id) continue
     if (post.status === 'design_ajuste') {
@@ -78,21 +79,30 @@ export default async function PipelinePage() {
     postsByClient[post.client_id].push(post)
   }
 
-  // ── Auto-popular: pautas concluídas + posts + alterações ──
-  const existingKeys = new Set(
-    (rawProducao ?? []).map((r: any) => `${r.client_id}__${r.mes}__${r.etapa}`)
-  )
-
+  // ── Auto-popular: pautas + posts + aprovação ──────────────
   const autoUpserts: any[] = []
 
-  // 1. Pautas concluídas → etapas
+  // 1. Pautas → etapas
+  // Agrupa por client+etapa, pega o melhor status (concluido > em_andamento > pendente)
+  const pautaBestByKey: Record<string, { status: string; data: string }> = {}
+  const rank: Record<string, number> = { concluido: 3, em_andamento: 2, pendente: 1 }
   for (const pauta of (rawPautas ?? []) as any[]) {
     const etapa = PAUTA_ETAPA[pauta.tipo]
-    if (!etapa || !pauta.client_id || pauta.status !== 'concluido') continue
-    autoUpserts.push({
-      client_id: pauta.client_id, mes: refMonthStr, etapa,
-      status: 'concluido', notas: 'Auto: pauta concluída',
-    })
+    if (!etapa || !pauta.client_id || pauta.status === 'cancelado') continue
+    const key = `${pauta.client_id}__${etapa}`
+    const existing = pautaBestByKey[key]
+    if (!existing || (rank[pauta.status] ?? 0) > (rank[existing.status] ?? 0)) {
+      pautaBestByKey[key] = { status: pauta.status, data: pauta.data }
+    }
+  }
+
+  for (const [key, { status, data }] of Object.entries(pautaBestByKey)) {
+    const [clientId, etapa] = key.split('__')
+    const pipelineStatus = status === 'concluido' ? 'concluido' : 'em_andamento'
+    const notas = status === 'concluido'
+      ? 'Auto: pauta concluída'
+      : `Auto: pauta agendada para ${data}`
+    autoUpserts.push({ client_id: clientId, mes: refMonthStr, etapa, status: pipelineStatus, notas })
   }
 
   // 2. Posts todos publicados → agendamento concluído
@@ -117,30 +127,22 @@ export default async function PipelinePage() {
     let notas: string
 
     if (ajustes > 0) {
-      // Cliente pediu alteração — bloqueado
       status = 'bloqueado'
       notas = `Auto: cliente pediu alteração em ${ajustes} material${ajustes > 1 ? 'is' : ''}`
     } else if (aguardando > 0) {
-      // Posts enviados ao cliente, aguardando resposta
       status = 'em_andamento'
       notas = `Auto: ${aguardando} material${aguardando > 1 ? 'is' : ''} aguardando aprovação do cliente`
     } else if (allApproved) {
-      // Tudo aprovado
       status = 'concluido'
       notas = 'Auto: todos os materiais aprovados pelo cliente'
     } else {
-      // Ainda não chegou ao cliente
       status = 'pendente'
       notas = 'Auto: materiais ainda não enviados para aprovação'
     }
 
-    autoUpserts.push({
-      client_id: client.id, mes: refMonthStr, etapa: 'aprovacao',
-      status, notas,
-    })
+    autoUpserts.push({ client_id: client.id, mes: refMonthStr, etapa: 'aprovacao', status, notas })
   }
 
-  // Upsert tudo (sobrescreve registros existentes para manter status atualizado)
   if (autoUpserts.length > 0) {
     await supabase.from('producao_mensal').upsert(autoUpserts, {
       onConflict: 'client_id,mes,etapa',
@@ -155,6 +157,7 @@ export default async function PipelinePage() {
       clients={clients as Pick<Client, 'id' | 'name' | 'status' | 'responsible_ids'>[]}
       producao={(finalProducao as ProducaoMensal[]) ?? []}
       profiles={(rawProfiles as Pick<Profile, 'id' | 'name' | 'role' | 'avatar_color'>[]) ?? []}
+      pautas={(rawPautas as any[]) ?? []}
       refMonthStr={refMonthStr}
       currentMonthStr={currentMonthStr}
       userRole={userRole}

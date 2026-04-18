@@ -39,16 +39,23 @@ export default async function PautasPage() {
     supabase.from('producao_mensal').select('*').eq('mes', refMonthStr),
   ])
 
-  // Clientes com SM ou Designer como responsável
-  // Fallback para todos os ativos se nenhum tiver responsible_ids configurado
   const teamIds = (rawProfiles ?? [])
     .filter((p: any) => p.role === 'social_media' || p.role === 'designer' || p.role === 'captacao')
     .map((p: any) => p.id)
 
-  const filteredByTeam = (rawClients ?? []).filter((c: any) =>
-    (c.responsible_ids ?? []).some((id: string) => teamIds.includes(id))
-  )
-  const activeClients = filteredByTeam.length > 0 ? filteredByTeam : (rawClients ?? [])
+  // Admin: todos os clientes com equipa como responsável
+  // Não-admin: apenas os clientes onde o próprio utilizador é responsável
+  let activeClients: any[]
+  if (userRole === 'admin') {
+    const filteredByTeam = (rawClients ?? []).filter((c: any) =>
+      (c.responsible_ids ?? []).some((id: string) => teamIds.includes(id))
+    )
+    activeClients = filteredByTeam.length > 0 ? filteredByTeam : (rawClients ?? [])
+  } else {
+    activeClients = (rawClients ?? []).filter((c: any) =>
+      (c.responsible_ids ?? []).includes(user!.id)
+    )
+  }
 
   return (
     <PautasView
