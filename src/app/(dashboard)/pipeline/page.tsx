@@ -25,10 +25,13 @@ export default async function PipelinePage() {
   const refMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1)
   const refMonthStr = refMonth.toISOString().split('T')[0]
   const currentMonthStr = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0]
-  // Pautas do mês ATUAL avançam o pipeline do PRÓXIMO mês
-  // Ex: pautas de abril → pipeline de maio
-  const refStart = currentMonthStr
-  const refEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0]
+  // Pautas: mês ATUAL (trabalho feito agora avança pipeline do próximo mês)
+  const pautaStart = currentMonthStr
+  const pautaEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0]
+
+  // Posts: mês do PIPELINE (próximo mês — conteúdo que será publicado)
+  const postStart = refMonthStr
+  const postEnd = new Date(refMonth.getFullYear(), refMonth.getMonth() + 1, 0).toISOString().split('T')[0]
 
   const [
     { data: rawProfiles },
@@ -44,11 +47,13 @@ export default async function PipelinePage() {
       .eq('status', 'ativo').order('name'),
     supabase.from('producao_mensal').select('*').in('mes', [refMonthStr, currentMonthStr]),
     supabase.from('pautas').select('id, client_id, tipo, status, data, assignee_id')
-      .gte('data', refStart).lte('data', refEnd),
+      .gte('data', pautaStart).lte('data', pautaEnd),
     supabase.from('posts').select('client_id, status, publish_date')
-      .gte('publish_date', refStart).lte('publish_date', refEnd),
+      .gte('publish_date', postStart).lte('publish_date', postEnd),
+    // Aprovação: posts do próximo mês em ciclo de revisão com o cliente
     supabase.from('posts').select('client_id, status')
-      .in('status', ['design_ajuste', 'cliente_aprovacao']),
+      .in('status', ['design_ajuste', 'cliente_aprovacao'])
+      .gte('publish_date', postStart).lte('publish_date', postEnd),
   ])
 
   const teamIds = (rawProfiles ?? [])
