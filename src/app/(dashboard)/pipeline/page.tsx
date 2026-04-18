@@ -96,6 +96,9 @@ export default async function PipelinePage() {
     }
   }
 
+  // Etapas mapeadas a pautas (aprovacao é controlada pelos posts, não por pauta)
+  const ETAPAS_PAUTA = Object.values(PAUTA_ETAPA)
+
   for (const [key, { status, data }] of Object.entries(pautaBestByKey)) {
     const [clientId, etapa] = key.split('__')
     const pipelineStatus = status === 'concluido' ? 'concluido' : 'em_andamento'
@@ -103,6 +106,20 @@ export default async function PipelinePage() {
       ? 'Auto: pauta concluída'
       : `Auto: pauta agendada para ${data}`
     autoUpserts.push({ client_id: clientId, mes: refMonthStr, etapa, status: pipelineStatus, notas })
+  }
+
+  // Reseta para "pendente" todas as etapas de cliente que NÃO têm pauta no mês
+  // Isto garante que pautas apagadas limpam o pipeline corretamente
+  for (const client of clients as any[]) {
+    for (const etapa of ETAPAS_PAUTA) {
+      const key = `${client.id}__${etapa}`
+      if (!pautaBestByKey[key]) {
+        autoUpserts.push({
+          client_id: client.id, mes: refMonthStr, etapa,
+          status: 'pendente', notas: 'Auto: sem pauta agendada',
+        })
+      }
+    }
   }
 
   // 2. Posts todos publicados → agendamento concluído
