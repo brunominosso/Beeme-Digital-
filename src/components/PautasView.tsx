@@ -178,6 +178,18 @@ export default function PautasView({ initialPautas, clients, profiles, producao:
   const [draggingId, setDraggingId] = useState<string | null>(null)
   const [dragOverCell, setDragOverCell] = useState<string | null>(null)
 
+  // Colaboradores equipa principal (SM + Designer)
+  const team = useMemo(() =>
+    profiles.filter(p => p.role === 'social_media' || p.role === 'designer'),
+    [profiles]
+  )
+
+  // Colaboradores captação (linha separada, só visível para admin)
+  const captacaoTeam = useMemo(() =>
+    profiles.filter(p => p.role === 'captacao'),
+    [profiles]
+  )
+
   // Pendências do pipeline por cliente
   // Mostra etapas que ainda não estão concluídas (exclui etapas automáticas)
   const pendencias = useMemo(() => {
@@ -221,18 +233,6 @@ export default function PautasView({ initialPautas, clients, profiles, producao:
     canCreate || (userRole === 'designer' && p?.assignee_id === currentUserId)
 
   const weekDays = useMemo(() => getWeekDays(weekRef), [weekRef])
-
-  // Colaboradores equipa principal (SM + Designer)
-  const team = useMemo(() =>
-    profiles.filter(p => p.role === 'social_media' || p.role === 'designer'),
-    [profiles]
-  )
-
-  // Colaboradores captação (linha separada, só visível para admin)
-  const captacaoTeam = useMemo(() =>
-    profiles.filter(p => p.role === 'captacao'),
-    [profiles]
-  )
 
   // Clientes de captação sem pauta agendada no mês visualizado
   const captacaoPendentes = useMemo(() => {
