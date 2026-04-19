@@ -34,12 +34,6 @@ export const metadata: Metadata = {
   },
 };
 
-export const viewport = {
-  width: "device-width",
-  initialScale: 1,
-  maximumScale: 1,
-};
-
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -48,6 +42,7 @@ export default function RootLayout({
   return (
     <html lang="pt-BR" className={`h-full ${barlowCondensed.variable} ${dmSans.variable} ${playfair.variable}`}>
       <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
         <meta name="theme-color" content="#9FA4DB" />
         <meta name="mobile-web-app-capable" content="yes" />
         <link rel="apple-touch-icon" href="/icons/apple-touch-icon.svg" />
