@@ -116,6 +116,11 @@ button, a, [role="button"], label {
   animation: slideUp 0.28s cubic-bezier(0.32, 0.72, 0, 1);
 }
 
+@keyframes slideInRight {
+  from { transform: translateX(100%); }
+  to   { transform: translateX(0); }
+}
+
 input[type="date"]::-webkit-calendar-picker-indicator,
 input[type="datetime-local"]::-webkit-calendar-picker-indicator {
   filter: invert(0.7);
