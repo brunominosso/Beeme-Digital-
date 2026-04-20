@@ -109,6 +109,7 @@ function PostModal({ post, clients, profiles, onClose, onSave, userRole }: {
   const [hashtagInput,  setHashtagInput]  = useState('')
   const [deliveryUrl,   setDeliveryUrl]   = useState(post.delivery_url ?? '')
   const [showNotesModal, setShowNotesModal] = useState(false)
+  const [notesTab, setNotesTab] = useState<'briefing' | 'revisoes'>('briefing')
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   function toggleAssignee(id: string) {
@@ -401,21 +402,71 @@ function PostModal({ post, clients, profiles, onClose, onSave, userRole }: {
             </div>
           </div>
 
-          {/* Notas / Briefing */}
+          {/* Notas / Briefing com abas */}
           <div>
-            <div className="flex items-center justify-between mb-1.5">
-              <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Notas / Briefing</p>
-              {notes.length > 80 && (
+            {/* Cabeçalho com abas */}
+            <div className="flex items-center gap-1 mb-1.5">
+              <button
+                type="button"
+                onClick={() => setNotesTab('briefing')}
+                className="text-xs px-2.5 py-1 rounded-md font-medium transition-colors"
+                style={notesTab === 'briefing'
+                  ? { background: 'var(--accent)', color: '#fff' }
+                  : { background: 'var(--surface-2)', color: 'var(--text-muted)' }}>
+                Briefing
+              </button>
+              <button
+                type="button"
+                onClick={() => setNotesTab('revisoes')}
+                className="text-xs px-2.5 py-1 rounded-md font-medium transition-colors flex items-center gap-1"
+                style={notesTab === 'revisoes'
+                  ? { background: '#f97316', color: '#fff' }
+                  : { background: 'var(--surface-2)', color: 'var(--text-muted)' }}>
+                Alterações do cliente
+                {post.approval_notes_history && post.approval_notes_history.length > 0 && (
+                  <span className="inline-flex items-center justify-center w-4 h-4 rounded-full text-[10px] font-bold"
+                    style={{ background: notesTab === 'revisoes' ? 'rgba(255,255,255,0.25)' : '#f97316', color: '#fff' }}>
+                    {post.approval_notes_history.length}
+                  </span>
+                )}
+              </button>
+              {notesTab === 'briefing' && notes.length > 80 && (
                 <button type="button" onClick={() => setShowNotesModal(true)}
-                  className="text-xs px-2 py-0.5 rounded-lg"
+                  className="ml-auto text-xs px-2 py-0.5 rounded-lg"
                   style={{ color: 'var(--accent)', background: 'var(--surface-2)' }}>
                   🔎 Ver completo
                 </button>
               )}
             </div>
-            <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={4}
-              className="w-full px-3 py-2 rounded-lg text-sm outline-none resize-none" style={inp}
-              placeholder="Observações, briefing ou roteiro..." />
+
+            {/* Aba Briefing */}
+            {notesTab === 'briefing' && (
+              <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={4}
+                className="w-full px-3 py-2 rounded-lg text-sm outline-none resize-none" style={inp}
+                placeholder="Observações, briefing ou roteiro..." />
+            )}
+
+            {/* Aba Alterações do cliente — somente leitura */}
+            {notesTab === 'revisoes' && (
+              <div className="space-y-1.5">
+                {(!post.approval_notes_history || post.approval_notes_history.length === 0) ? (
+                  <p className="text-xs px-3 py-4 text-center rounded-lg"
+                    style={{ color: 'var(--text-muted)', background: 'var(--surface-2)' }}>
+                    Nenhuma alteração solicitada ainda
+                  </p>
+                ) : (
+                  post.approval_notes_history.map((h, i) => (
+                    <div key={i} className="px-3 py-2 rounded-lg" style={{ background: '#f9731610', border: '1px solid #f9731630' }}>
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-xs font-semibold" style={{ color: '#f97316' }}>Revisão {h.version}</span>
+                        <span className="text-xs" style={{ color: 'var(--text-muted)' }}>{h.date} · {h.reviewer}</span>
+                      </div>
+                      <p className="text-xs leading-snug" style={{ color: '#fed7aa' }}>{h.notes}</p>
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
           </div>
 
           {/* Modal de notes expandido */}
@@ -441,24 +492,6 @@ function PostModal({ post, clients, profiles, onClose, onSave, userRole }: {
                     Fechar
                   </button>
                 </div>
-              </div>
-            </div>
-          )}
-
-          {/* Histórico de revisões — somente leitura */}
-          {post.approval_notes_history && post.approval_notes_history.length > 0 && (
-            <div>
-              <p className="text-xs mb-2" style={{ color: 'var(--text-muted)' }}>Histórico de revisões</p>
-              <div className="space-y-1.5">
-                {post.approval_notes_history.map((h, i) => (
-                  <div key={i} className="px-3 py-2 rounded-lg" style={{ background: '#f9731610', border: '1px solid #f9731630' }}>
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-xs font-semibold" style={{ color: '#f97316' }}>Revisão {h.version}</span>
-                      <span className="text-xs" style={{ color: 'var(--text-muted)' }}>{h.date} · {h.reviewer}</span>
-                    </div>
-                    <p className="text-xs leading-snug" style={{ color: '#fed7aa' }}>{h.notes}</p>
-                  </div>
-                ))}
               </div>
             </div>
           )}

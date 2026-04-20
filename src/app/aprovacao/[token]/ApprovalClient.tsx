@@ -9,7 +9,7 @@ type ApprovalTask = {
   id: string
   title: string
   description: string | null
-  notes: string | null
+  caption: string | null
   platform: string | null
   format: string | null
   due_date: string | null
@@ -341,17 +341,17 @@ export default function ApprovalClient({
                           {/* Todos os arquivos */}
                           {hasFiles && <FileGrid files={task.files} />}
 
-                          {/* Notas */}
-                          {task.notes && (
+                          {/* Legenda */}
+                          {task.caption && (
                             <div className="rounded-xl px-3.5 py-3 mt-3"
                               style={{ background: '#111116', border: '1px solid #2a2a35' }}>
                               <p className="text-xs font-semibold uppercase tracking-wider mb-1"
-                                style={{ color: '#6b7280' }}>Obs. da equipe</p>
-                              <p className="text-sm" style={{ color: '#d1d5db' }}>{task.notes}</p>
+                                style={{ color: '#6b7280' }}>Legenda</p>
+                              <p className="text-sm" style={{ color: '#d1d5db' }}>{task.caption}</p>
                             </div>
                           )}
 
-                          {!hasFiles && !task.notes && (
+                          {!hasFiles && !task.caption && (
                             <p className="text-sm text-center py-4" style={{ color: '#4b5563' }}>
                               Nenhum arquivo anexado
                             </p>
