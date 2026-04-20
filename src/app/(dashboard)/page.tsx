@@ -1,10 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
-import HomeDashboard from '@/components/HomeDashboard'
-import HomeDesigner from '@/components/HomeDesigner'
-import HomeSocialMedia from '@/components/HomeSocialMedia'
-import HomeFinanceiro from '@/components/HomeFinanceiro'
-import HomeMobile from '@/components/HomeMobile'
+import DashboardHomeSwitch from '@/components/DashboardHomeSwitch'
 import type { Client, Task, Meeting, Profile, Invoice, Expense, Post, PaymentSchedule } from '@/types/database'
 
 export default async function DashboardPage() {
@@ -37,7 +33,6 @@ export default async function DashboardPage() {
     supabase.from('expenses').select('*').order('date', { ascending: false }),
     supabase.from('profiles').select('id, name, avatar_color, role').order('name'),
     supabase.from('posts').select('*').order('publish_date', { ascending: true }),
-    // RLS garante que só role=financeiro recebe dados
     supabase.from('payment_schedules').select('*, clients(name, status)').order('payment_day', { ascending: true }),
   ])
 
@@ -52,6 +47,8 @@ export default async function DashboardPage() {
   type ScheduleWithClient = PaymentSchedule & { clients: { name: string; status: string } | null }
   const allSchedules = (rawSchedules as ScheduleWithClient[]) ?? []
 
+  if (profile?.role === 'captacao') redirect('/pautas')
+
   const myClients = profile?.role === 'admin'
     ? allClients
     : allClients.filter(c => c.responsible_ids?.includes(user!.id))
@@ -64,7 +61,7 @@ export default async function DashboardPage() {
     ? allPosts
     : allPosts.filter(p => p.assignee_ids?.includes(user!.id))
 
-  const defaultProfile: Profile = {
+  const activeProfile: Profile = profile ?? {
     id: user!.id,
     name: user?.user_metadata?.name || user?.email || 'Utilizador',
     role: 'gestor',
@@ -73,43 +70,23 @@ export default async function DashboardPage() {
     created_at: now.toISOString(),
   }
 
-  const activeProfile = profile ?? defaultProfile
-
-  const sharedProps = {
-    profile: activeProfile,
-    myClients,
-    allTasks: myTasks,
-    upcomingMeetings,
-    todayStr,
-    tomorrowStr,
-    weekEndStr,
-  }
-
-  const mobileView = (
-    <div className="md:hidden">
-      <HomeMobile
-        profile={activeProfile}
-        myClients={myClients}
-        allTasks={myTasks}
-        upcomingMeetings={upcomingMeetings}
-        todayStr={todayStr}
-        tomorrowStr={tomorrowStr}
-        allProfiles={allProfiles}
-        allPosts={allPosts}
-      />
-    </div>
+  return (
+    <DashboardHomeSwitch
+      profile={activeProfile}
+      myClients={myClients}
+      allClients={allClients}
+      myTasks={myTasks}
+      allTasks={allTasks}
+      upcomingMeetings={upcomingMeetings}
+      allProfiles={allProfiles}
+      allPosts={allPosts}
+      myPosts={myPosts}
+      allInvoices={allInvoices}
+      allExpenses={allExpenses}
+      paymentSchedules={allSchedules}
+      todayStr={todayStr}
+      tomorrowStr={tomorrowStr}
+      weekEndStr={weekEndStr}
+    />
   )
-
-  switch (activeProfile.role) {
-    case 'captacao':
-      redirect('/pautas')
-    case 'designer':
-      return <>{mobileView}<div className="hidden md:block"><HomeDesigner {...sharedProps} myPosts={myPosts} allClients={allClients} /></div></>
-    case 'social_media':
-      return <>{mobileView}<div className="hidden md:block"><HomeSocialMedia {...sharedProps} myPosts={myPosts} allClients={allClients} weekEndStr={weekEndStr} /></div></>
-    case 'financeiro':
-      return <>{mobileView}<div className="hidden md:block"><HomeFinanceiro {...sharedProps} allInvoices={allInvoices} allExpenses={allExpenses} paymentSchedules={allSchedules} /></div></>
-    default:
-      return <>{mobileView}<div className="hidden md:block"><HomeDashboard {...sharedProps} allProfiles={allProfiles} allClients={allClients} allPosts={allPosts} allTasks={allTasks} /></div></>
-  }
 }

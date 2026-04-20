@@ -56,7 +56,13 @@ export default function DashboardShell({ user, role, children }: Props) {
   const initials = (user.user_metadata?.name || user.email || '?')[0].toUpperCase()
 
   useEffect(() => {
-    const check = () => setIsMobile(window.innerWidth < 768)
+    const check = () => {
+      // screen.width usa pixels físicos do ecrã — ignora "desktop mode" do browser
+      const narrowScreen = window.screen.width < 768
+      const narrowViewport = window.innerWidth < 1024
+      const isTouch = navigator.maxTouchPoints > 0
+      setIsMobile(narrowViewport || (isTouch && narrowScreen))
+    }
     check()
     window.addEventListener('resize', check)
     return () => window.removeEventListener('resize', check)
