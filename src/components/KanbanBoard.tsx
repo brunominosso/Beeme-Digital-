@@ -173,10 +173,13 @@ export default function KanbanBoard({
   const [status, setStatus] = useState(defaultStatus)
   const [saving, setSaving] = useState(false)
   const [showRawDescription, setShowRawDescription] = useState(false)
+  const [checklistEditMode, setChecklistEditMode] = useState(false)
   const [taskStyle, setTaskStyle] = useState<'simples' | 'checklist'>('simples')
 
   const [filterFrom, setFilterFrom] = useState('')
   const [filterTo, setFilterTo] = useState('')
+  const [showDone, setShowDone] = useState(false)
+  const [doneFilterDate, setDoneFilterDate] = useState('')
 
   // Templates
   const [showTemplates, setShowTemplates] = useState(false)
@@ -189,11 +192,38 @@ export default function KanbanBoard({
 
   const today = new Date().toISOString().split('T')[0]
 
+  // Início da semana atual (segunda-feira)
+  const startOfWeek = (() => {
+    const d = new Date()
+    const day = d.getDay() // 0=Dom
+    const diff = day === 0 ? -6 : 1 - day // ajusta para segunda
+    d.setDate(d.getDate() + diff)
+    d.setHours(0, 0, 0, 0)
+    return d.toISOString().split('T')[0]
+  })()
+
   // Active clients for template checklist
   const activeClients = clients.filter(c =>
     (c.status === 'ativo' || c.status === 'active') &&
     (!currentUserId || (c.responsible_ids as string[] | null)?.includes(currentUserId))
   )
+
+  // Tarefas concluídas para o painel de histórico
+  const doneTasks = tasks
+    .filter(t => {
+      if (t.status !== 'done' && t.status !== 'sm_aprovacao') return false
+      if (doneFilterDate) {
+        const updatedAt = (t as any).updated_at
+        const completedDate = updatedAt ? updatedAt.split('T')[0] : (t.due_date || '')
+        return completedDate === doneFilterDate
+      }
+      return true
+    })
+    .sort((a, b) => {
+      const aDate = (a as any).updated_at || a.due_date || ''
+      const bDate = (b as any).updated_at || b.due_date || ''
+      return bDate.localeCompare(aDate)
+    })
 
   function getTaskColumn(task: TaskWithRelations): ColConfig | undefined {
     return columns.find(c => c.displayStatuses.includes(task.status))
@@ -224,6 +254,7 @@ export default function KanbanBoard({
     setStatus(col?.dropStatus ?? defaultStatus)
     setTaskStyle('simples')
     setShowRawDescription(false)
+    setChecklistEditMode(false)
     setShowForm(true)
   }
 
@@ -241,6 +272,7 @@ export default function KanbanBoard({
     const isChecklist = parseChecklist(task.description || '').hasChecklist
     setTaskStyle(isChecklist ? 'checklist' : 'simples')
     setShowRawDescription(false)
+    setChecklistEditMode(false)
     setShowForm(true)
   }
 
@@ -337,7 +369,9 @@ export default function KanbanBoard({
     setSavingTemplate(true)
     const supabase = createClient()
     const { data: { user } } = await supabase.auth.getUser()
-    await supabase.from('task_templates').insert({
+
+    // Tenta salvar com cadência; se falhar (migration não rodada), salva sem
+    let { error } = await supabase.from('task_templates').insert({
       title: newTemplateName.trim(),
       description: description || null,
       priority,
@@ -346,6 +380,23 @@ export default function KanbanBoard({
       cadencia_ativa: templateCadenciaAtiva,
       cadencia_dia: templateCadenciaAtiva ? templateCadenciaDia : null,
     })
+
+    if (error) {
+      // Tenta sem campos de cadência (migration pode não ter sido rodada)
+      const fallback = await supabase.from('task_templates').insert({
+        title: newTemplateName.trim(),
+        description: description || null,
+        priority,
+        assignee_id: assigneeId || null,
+        created_by: user?.id,
+      })
+      if (fallback.error) {
+        alert(`Erro ao salvar modelo: ${fallback.error.message}`)
+        setSavingTemplate(false)
+        return
+      }
+    }
+
     setNewTemplateName('')
     setTemplateCadenciaAtiva(false)
     setTemplateCadenciaDia(1)
@@ -428,6 +479,15 @@ export default function KanbanBoard({
           <p className="text-xs mt-0.5 hidden md:block" style={{ color: 'var(--text-muted)' }}>{headerStats}</p>
         </div>
         <div className="flex items-center gap-2">
+          <button onClick={() => setShowDone(v => !v)}
+            className="px-3 py-2 rounded-lg text-sm font-semibold"
+            style={{
+              background: showDone ? 'var(--success)20' : 'var(--surface-2)',
+              color: showDone ? 'var(--success)' : 'var(--text-muted)',
+              border: `1px solid ${showDone ? 'var(--success)40' : 'var(--border)'}`,
+            }}>
+            ✓ Concluídas
+          </button>
           <button onClick={openTemplates}
             className="px-3 py-2 rounded-lg text-sm font-semibold hidden md:block"
             style={{ background: 'var(--surface-2)', color: 'var(--text-muted)', border: '1px solid var(--border)' }}>
@@ -449,7 +509,7 @@ export default function KanbanBoard({
       </div>
 
       {/* Filtro de data — desktop only, mobile usa botão compacto */}
-      <div className="border-b shrink-0" style={{ borderColor: 'var(--border)' }}>
+      {!showDone && <div className="border-b shrink-0" style={{ borderColor: 'var(--border)' }}>
         {/* Desktop */}
         <div className="hidden md:flex px-6 py-3 items-center gap-3">
           <span className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>Filtrar por data:</span>
@@ -493,9 +553,103 @@ export default function KanbanBoard({
             )
           })}
         </div>
-      </div>
+      </div>}
+
+      {/* Painel de tarefas concluídas */}
+      {showDone && (
+        <div className="flex-1 overflow-y-auto p-4 md:p-6">
+          <div className="max-w-2xl mx-auto">
+            <div className="flex items-center gap-3 mb-5 flex-wrap">
+              <span className="text-sm font-semibold text-white">Tarefas concluídas</span>
+              <div className="flex items-center gap-2">
+                <span className="text-xs" style={{ color: 'var(--text-muted)' }}>Concluídas em:</span>
+                <input type="date" value={doneFilterDate} onChange={e => setDoneFilterDate(e.target.value)}
+                  className="px-3 py-1.5 rounded-lg text-xs text-white outline-none"
+                  style={{ background: 'var(--surface-2)', border: '1px solid var(--border)' }} />
+                {doneFilterDate && (
+                  <button onClick={() => setDoneFilterDate('')}
+                    className="text-xs px-2 py-1 rounded-lg"
+                    style={{ background: 'var(--surface-2)', color: 'var(--text-muted)' }}>
+                    Limpar ✕
+                  </button>
+                )}
+              </div>
+              <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                {doneTasks.length} {doneTasks.length === 1 ? 'tarefa' : 'tarefas'}
+              </span>
+            </div>
+            {doneTasks.length === 0 ? (
+              <div className="text-center py-16 rounded-xl" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+                <div className="text-4xl mb-3">✓</div>
+                <p className="text-sm font-medium text-white">Nenhuma tarefa concluída</p>
+                <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
+                  {doneFilterDate ? 'Sem tarefas concluídas neste dia' : 'As tarefas concluídas aparecerão aqui'}
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {doneTasks.map(task => {
+                  const p = PRIORITY[task.priority as keyof typeof PRIORITY]
+                  const updatedAt = (task as any).updated_at
+                  const completedDate = updatedAt
+                    ? new Date(updatedAt).toLocaleDateString('pt-BR', { day: 'numeric', month: 'short', year: 'numeric' })
+                    : task.due_date
+                    ? new Date(task.due_date + 'T12:00:00').toLocaleDateString('pt-BR', { day: 'numeric', month: 'short' })
+                    : ''
+                  const checklist = parseChecklist(task.description || '')
+                  return (
+                    <div key={task.id} className="rounded-lg p-3 flex items-start gap-3"
+                      style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+                      <div className="w-5 h-5 rounded-full flex items-center justify-center shrink-0 mt-0.5"
+                        style={{ background: 'rgba(74,222,128,0.15)', border: '1px solid rgba(74,222,128,0.3)' }}>
+                        <svg width="10" height="8" viewBox="0 0 10 8" fill="none">
+                          <path d="M1 4L3.5 6.5L9 1" stroke="#4ade80" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+                        </svg>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-white">{task.title}</p>
+                        {checklist.hasChecklist && (
+                          <div className="flex items-center gap-2 mt-1">
+                            <div className="w-24 h-1 rounded-full overflow-hidden" style={{ background: 'var(--border)' }}>
+                              <div className="h-full rounded-full" style={{
+                                background: 'var(--success)',
+                                width: checklist.total > 0 ? `${(checklist.done / checklist.total) * 100}%` : '0%',
+                              }} />
+                            </div>
+                            <span className="text-xs" style={{ color: 'var(--text-muted)' }}>{checklist.done}/{checklist.total}</span>
+                          </div>
+                        )}
+                        <div className="flex gap-2 flex-wrap mt-1">
+                          {task.clients && (
+                            <span className="text-xs px-1.5 py-0.5 rounded" style={{ background: 'var(--accent)20', color: 'var(--accent)' }}>
+                              {task.clients.name}
+                            </span>
+                          )}
+                          {p && (
+                            <span className="text-xs px-1.5 py-0.5 rounded" style={{ background: `${p.color}20`, color: p.color }}>
+                              {p.label}
+                            </span>
+                          )}
+                          {completedDate && (
+                            <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                              {completedDate}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <button onClick={() => openEdit(task)}
+                        className="text-xs shrink-0" style={{ color: 'var(--text-muted)' }}>✎</button>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Board */}
+      {!showDone && (
       <div id="kanban-board" className="kanban-board flex-1 overflow-x-auto p-3 md:p-6">
         <div className="flex gap-3 md:gap-4 h-full min-w-max">
           {columns.map(col => {
@@ -504,8 +658,12 @@ export default function KanbanBoard({
 
               const isDone = t.status === 'done' || t.status === 'sm_aprovacao'
 
-              // Auto-archive: tarefas concluídas após a data final somem do quadro
-              if (isDone && t.due_date && t.due_date < today) return false
+              // Auto-hide concluídas de semanas anteriores — usar updated_at como proxy de conclusão
+              if (isDone) {
+                const updatedAt = (t as any).updated_at
+                const completedDate = updatedAt ? updatedAt.split('T')[0] : (t.due_date || '')
+                if (completedDate < startOfWeek) return false
+              }
 
               // Não mostrar tarefas antes da data inicial
               if ((t as any).start_date && (t as any).start_date > today) return false
@@ -672,6 +830,7 @@ export default function KanbanBoard({
           })}
         </div>
       </div>
+      )}
 
       {/* FAB — mobile only */}
       <button
@@ -740,11 +899,18 @@ export default function KanbanBoard({
                       <span className="text-xs font-semibold" style={{ color: 'var(--text-muted)' }}>
                         {parsed.done === parsed.total && parsed.total > 0 ? '✅ Tudo pronto!' : `${parsed.done} de ${parsed.total} concluídos`}
                       </span>
-                      <button onClick={() => setShowRawDescription(true)}
-                        className="text-xs px-2 py-0.5 rounded"
-                        style={{ color: 'var(--text-muted)', background: 'var(--surface)' }}>
-                        Editar texto
-                      </button>
+                      <div className="flex gap-1">
+                        <button onClick={() => { setChecklistEditMode(v => !v) }}
+                          className="text-xs px-2 py-0.5 rounded"
+                          style={{ color: checklistEditMode ? 'var(--danger)' : 'var(--text-muted)', background: 'var(--surface)' }}>
+                          {checklistEditMode ? 'Concluir edição' : '✎ Editar lista'}
+                        </button>
+                        <button onClick={() => setShowRawDescription(true)}
+                          className="text-xs px-2 py-0.5 rounded"
+                          style={{ color: 'var(--text-muted)', background: 'var(--surface)' }}>
+                          txt
+                        </button>
+                      </div>
                     </div>
                     {/* Barra de progresso */}
                     <div className="h-2 rounded-full overflow-hidden mb-3" style={{ background: 'var(--border)' }}>
@@ -789,14 +955,19 @@ export default function KanbanBoard({
                             onClick={() => toggleDescriptionLine(i)}>
                             {item.text}
                           </span>
-                          <button
-                            type="button"
-                            onClick={e => { e.preventDefault(); e.stopPropagation(); removeDescriptionLine(i) }}
-                            className="w-5 h-5 flex items-center justify-center rounded-full shrink-0 text-xs transition-opacity opacity-30 hover:opacity-100"
-                            style={{ color: 'var(--danger, #ef4444)' }}
-                            title="Remover da lista">
-                            ✕
-                          </button>
+                          {checklistEditMode && (
+                            <button
+                              type="button"
+                              onClick={e => {
+                                e.preventDefault(); e.stopPropagation()
+                                if (confirm(`Remover "${item.text}" da lista?`)) removeDescriptionLine(i)
+                              }}
+                              className="w-6 h-6 flex items-center justify-center rounded-full shrink-0 text-xs"
+                              style={{ color: 'var(--danger)', background: 'rgba(248,113,113,0.15)', border: '1px solid rgba(248,113,113,0.3)' }}
+                              title="Remover da lista">
+                              ✕
+                            </button>
+                          )}
                         </label>
                       )
                     })}
