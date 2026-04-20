@@ -105,6 +105,28 @@ function getMonthWeeks(referenceDate: Date): Date[][] {
   return weeks
 }
 
+// ── Google Calendar link ──────────────────────────────────────
+
+function buildGoogleCalendarUrl(pauta: Pauta, clientName?: string): string {
+  const base = pauta.data.replace(/-/g, '') // YYYYMMDD
+
+  let dates: string
+  if (pauta.turno === 'dia_todo') {
+    const nextDay = new Date(pauta.data + 'T12:00:00')
+    nextDay.setDate(nextDay.getDate() + 1)
+    const nextDayStr = nextDay.toISOString().split('T')[0].replace(/-/g, '')
+    dates = `${base}/${nextDayStr}`
+  } else {
+    const [startH, endH] = pauta.turno === 'manha' ? ['090000', '120000'] : ['140000', '180000']
+    dates = `${base}T${startH}/${base}T${endH}`
+  }
+
+  const title = clientName ? `Captação — ${clientName}` : 'Captação Externa'
+  const details = pauta.notas ? encodeURIComponent(pauta.notas) : ''
+
+  return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(title)}&dates=${dates}&details=${details}`
+}
+
 // ── Componente principal ──────────────────────────────────────
 
 // Etapas do pipeline com o tipo de pauta correspondente para criar
@@ -1358,6 +1380,29 @@ export default function PautasView({ initialPautas, clients, profiles, producao:
               )}
             </div>
           </div>
+
+          {/* Google Agenda — só captação externa */}
+          {selected.tipo === 'captacao' && (
+            <div className="px-5 pb-4">
+              <a
+                href={buildGoogleCalendarUrl(
+                  selected,
+                  clients.find(c => c.id === selected.client_id)?.name
+                )}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl text-sm font-semibold transition-opacity hover:opacity-80"
+                style={{ background: '#1a73e820', border: '1px solid #1a73e840', color: '#4a9af5' }}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                  <rect x="3" y="4" width="18" height="18" rx="2" stroke="#4a9af5" strokeWidth="1.8"/>
+                  <path d="M3 9h18" stroke="#4a9af5" strokeWidth="1.8"/>
+                  <path d="M8 2v4M16 2v4" stroke="#4a9af5" strokeWidth="1.8" strokeLinecap="round"/>
+                  <rect x="7" y="13" width="4" height="3" rx="0.5" fill="#4a9af5"/>
+                </svg>
+                Adicionar ao Google Agenda
+              </a>
+            </div>
+          )}
 
           {/* Footer ações */}
           {canEditDetail(selected) && (
