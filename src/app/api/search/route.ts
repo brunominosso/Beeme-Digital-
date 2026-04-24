@@ -15,16 +15,19 @@ export async function GET(req: NextRequest) {
     supabase
       .from('clients')
       .select('id, name, niche, status')
+      .eq('user_id', user.id)
       .ilike('name', like)
       .limit(5),
     supabase
       .from('posts')
       .select('id, title, client_id, status, clients(name)')
+      .eq('user_id', user.id)
       .ilike('title', like)
       .limit(5),
     supabase
       .from('tasks')
       .select('id, title, client_id, status, clients(name)')
+      .eq('user_id', user.id)
       .ilike('title', like)
       .limit(5),
   ])

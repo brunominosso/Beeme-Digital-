@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import React, { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
@@ -531,21 +531,42 @@ export default function ClientDetail({
               <h2 className="text-sm font-semibold mb-3" style={{ color: 'var(--text-muted)' }}>INFORMAÇÕES ÚTEIS</h2>
               <div className="grid grid-cols-2 gap-4">
                 {[
-                  { label: '🔐 Senhas de acesso', field: 'passwords', placeholder: 'Insere aqui todas as senhas de acesso fornecidas pelo cliente.' },
-                  { label: '😟 Pontos de dor', field: 'pain_points', placeholder: 'Lista aqui os pontos de dor deste cliente.' },
-                  { label: '🏪 Principais concorrentes', field: 'competitors', placeholder: 'Lista aqui os principais concorrentes deste cliente.' },
-                  { label: '🎯 Expectativas', field: 'expectations', placeholder: 'Anota as expectativas do cliente com relação ao teu serviço.' },
+                  { label: '🔐 Senhas de acesso', field: 'passwords', placeholder: 'Insere aqui todas as senhas de acesso fornecidas pelo cliente.', sensitive: true },
+                  { label: '😟 Pontos de dor', field: 'pain_points', placeholder: 'Lista aqui os pontos de dor deste cliente.', sensitive: false },
+                  { label: '🏪 Principais concorrentes', field: 'competitors', placeholder: 'Lista aqui os principais concorrentes deste cliente.', sensitive: false },
+                  { label: '🎯 Expectativas', field: 'expectations', placeholder: 'Anota as expectativas do cliente com relação ao teu serviço.', sensitive: false },
                 ].map(card => {
                   const fieldValue = client[card.field as keyof Client] as string | null
                   const [val, setVal] = useState(fieldValue || '')
+                  const [revealed, setRevealed] = useState(false)
                   return (
                     <div key={card.field} className="rounded-xl p-4" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
-                      <p className="text-sm font-semibold text-white mb-2">{card.label}</p>
+                      <div className="flex items-center justify-between mb-2">
+                        <p className="text-sm font-semibold text-white">{card.label}</p>
+                        {card.sensitive && val && (
+                          <button
+                            type="button"
+                            onClick={() => setRevealed(r => !r)}
+                            className="text-xs px-2 py-0.5 rounded"
+                            style={{ color: 'var(--text-muted)', border: '1px solid var(--border)' }}
+                          >
+                            {revealed ? 'Ocultar' : 'Revelar'}
+                          </button>
+                        )}
+                      </div>
                       <textarea value={val} onChange={e => setVal(e.target.value)}
                         onBlur={() => updateField(card.field, val || null)}
                         rows={4} placeholder={card.placeholder}
                         className="w-full text-xs outline-none resize-none"
-                        style={{ background: 'transparent', color: val ? 'var(--text)' : 'var(--text-muted)' }} />
+                        style={{
+                          background: 'transparent',
+                          color: val ? 'var(--text)' : 'var(--text-muted)',
+                          ...(card.sensitive && val && !revealed ? {
+                            WebkitTextSecurity: 'disc',
+                            textSecurity: 'disc',
+                            letterSpacing: '0.15em',
+                          } as React.CSSProperties : {}),
+                        }} />
                     </div>
                   )
                 })}

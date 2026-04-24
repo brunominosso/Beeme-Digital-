@@ -19,10 +19,23 @@ export async function POST(req: NextRequest) {
 
   if (!file) return NextResponse.json({ error: 'Nenhum arquivo enviado' }, { status: 400 })
 
+  const ALLOWED_MIME_TYPES = [
+    'image/jpeg', 'image/png', 'image/webp', 'image/gif',
+    'video/mp4', 'video/quicktime', 'video/webm',
+    'application/pdf',
+  ]
+
+  if (!ALLOWED_MIME_TYPES.includes(file.type)) {
+    return NextResponse.json({ error: 'Tipo de arquivo não permitido' }, { status: 400 })
+  }
+
   // Limite de 100 MB por arquivo
   if (file.size > 100 * 1024 * 1024) {
     return NextResponse.json({ error: 'Arquivo muito grande (máx 100 MB)' }, { status: 400 })
   }
+
+  const isVideo = file.type.startsWith('video/')
+  const resourceType = isVideo ? 'video' : 'image'
 
   try {
     const bytes  = await file.arrayBuffer()
@@ -30,9 +43,9 @@ export async function POST(req: NextRequest) {
     const base64 = `data:${file.type};base64,${buffer.toString('base64')}`
 
     const result = await cloudinary.uploader.upload(base64, {
-      resource_type: 'auto',   // detecta imagem/vídeo automaticamente
+      resource_type: resourceType,
       folder:        'beeme-digital/posts',
-      use_filename:  true,
+      use_filename:  false,
       unique_filename: true,
     })
 

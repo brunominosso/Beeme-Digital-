@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import Image from 'next/image'
 
 type PostFile = { name: string; url: string; type: string; size: number }
@@ -39,18 +39,76 @@ function isVideo(type: string) { return type.startsWith('video/') }
 function isLink(type: string)  { return type.startsWith('link/') }
 
 // ── Lightbox ──────────────────────────────────────────────────────────────────
-function Lightbox({ url, onClose }: { url: string; onClose: () => void }) {
+function Lightbox({ urls, startIndex, onClose }: { urls: string[]; startIndex: number; onClose: () => void }) {
+  const [idx, setIdx] = useState(startIndex)
+  const containerRef = useRef<HTMLDivElement>(null)
+  const swipedRef    = useRef(false)
+
+  useEffect(() => {
+    const el = containerRef.current
+    if (!el || urls.length <= 1) return
+
+    let startX = 0
+    let startY = 0
+
+    function onStart(e: TouchEvent) {
+      startX = e.touches[0].clientX
+      startY = e.touches[0].clientY
+    }
+    function onEnd(e: TouchEvent) {
+      const dx = startX - e.changedTouches[0].clientX
+      const dy = startY - e.changedTouches[0].clientY
+      if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 40) {
+        swipedRef.current = true
+        setIdx(i => dx > 0 ? (i + 1) % urls.length : (i - 1 + urls.length) % urls.length)
+      }
+    }
+
+    el.addEventListener('touchstart', onStart, { passive: true })
+    el.addEventListener('touchend',   onEnd,   { passive: true })
+    return () => {
+      el.removeEventListener('touchstart', onStart)
+      el.removeEventListener('touchend',   onEnd)
+    }
+  }, [urls.length])
+
+  function handleOverlayClick() {
+    if (swipedRef.current) { swipedRef.current = false; return }
+    onClose()
+  }
+
   return (
     <div
+      ref={containerRef}
       className="fixed inset-0 z-50 flex items-center justify-center p-4"
       style={{ background: 'rgba(0,0,0,0.93)' }}
-      onClick={onClose}>
+      onClick={handleOverlayClick}>
       <button
         className="absolute top-4 right-4 text-white text-2xl font-bold w-10 h-10 flex items-center justify-center rounded-full"
         style={{ background: 'rgba(255,255,255,0.15)' }}
-        onClick={onClose}>✕</button>
+        onClick={e => { e.stopPropagation(); onClose() }}>✕</button>
+
+      {urls.length > 1 && (
+        <>
+          <button
+            className="absolute left-3 top-1/2 -translate-y-1/2 text-white w-10 h-10 flex items-center justify-center rounded-full text-xl"
+            style={{ background: 'rgba(255,255,255,0.15)' }}
+            onClick={e => { e.stopPropagation(); setIdx(i => (i - 1 + urls.length) % urls.length) }}>‹</button>
+          <button
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-white w-10 h-10 flex items-center justify-center rounded-full text-xl"
+            style={{ background: 'rgba(255,255,255,0.15)' }}
+            onClick={e => { e.stopPropagation(); setIdx(i => (i + 1) % urls.length) }}>›</button>
+          <div className="absolute bottom-5 left-0 right-0 flex justify-center gap-1.5">
+            {urls.map((_, i) => (
+              <span key={i} className="w-1.5 h-1.5 rounded-full"
+                style={{ background: i === idx ? '#fff' : 'rgba(255,255,255,0.35)' }} />
+            ))}
+          </div>
+        </>
+      )}
+
       <img
-        src={url}
+        src={urls[idx]}
         alt=""
         className="max-w-full max-h-full rounded-xl object-contain"
         style={{ maxHeight: '90vh' }}
@@ -60,9 +118,113 @@ function Lightbox({ url, onClose }: { url: string; onClose: () => void }) {
   )
 }
 
+// ── ImageCarousel ─────────────────────────────────────────────────────────────
+function ImageCarousel({ imgs, onOpen }: { imgs: PostFile[]; onOpen: (idx: number) => void }) {
+  const [idx, setIdx] = useState(0)
+  const containerRef  = useRef<HTMLDivElement>(null)
+  const swipedRef     = useRef(false)
+  const startXRef     = useRef(0)
+  const startYRef     = useRef(0)
+
+  useEffect(() => {
+    const el = containerRef.current
+    if (!el || imgs.length <= 1) return
+
+    function onTouchStart(e: TouchEvent) {
+      startXRef.current = e.touches[0].clientX
+      startYRef.current = e.touches[0].clientY
+      swipedRef.current = false
+    }
+    function onTouchEnd(e: TouchEvent) {
+      const dx = startXRef.current - e.changedTouches[0].clientX
+      const dy = startYRef.current - e.changedTouches[0].clientY
+      if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 35) {
+        swipedRef.current = true
+        if (dx > 0) setIdx(i => Math.min(i + 1, imgs.length - 1))
+        else        setIdx(i => Math.max(i - 1, 0))
+      }
+    }
+
+    el.addEventListener('touchstart', onTouchStart, { passive: true })
+    el.addEventListener('touchend',   onTouchEnd,   { passive: true })
+    return () => {
+      el.removeEventListener('touchstart', onTouchStart)
+      el.removeEventListener('touchend',   onTouchEnd)
+    }
+  }, [imgs.length])
+
+  const slideW = 100 / imgs.length
+
+  return (
+    <div ref={containerRef} className="relative rounded-xl overflow-hidden" style={{ height: '240px' }}>
+      {/* Track deslizante */}
+      <div
+        className="flex h-full"
+        style={{
+          width: `${imgs.length * 100}%`,
+          transform: `translateX(-${idx * slideW}%)`,
+          transition: 'transform 0.28s ease',
+        }}
+      >
+        {imgs.map((f, i) => (
+          <div
+            key={i}
+            className="h-full flex-shrink-0 cursor-pointer"
+            style={{ width: `${slideW}%` }}
+            onClick={() => { if (!swipedRef.current) onOpen(i) }}
+          >
+            <img src={f.url} alt={f.name} className="w-full h-full object-cover" />
+          </div>
+        ))}
+      </div>
+
+      {imgs.length > 1 && (
+        <>
+          {/* Setas */}
+          {idx > 0 && (
+            <button
+              className="absolute left-2 top-1/2 -translate-y-1/2 w-8 h-8 flex items-center justify-center rounded-full text-white text-xl"
+              style={{ background: 'rgba(0,0,0,0.55)' }}
+              onClick={() => setIdx(i => i - 1)}>
+              ‹
+            </button>
+          )}
+          {idx < imgs.length - 1 && (
+            <button
+              className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 flex items-center justify-center rounded-full text-white text-xl"
+              style={{ background: 'rgba(0,0,0,0.55)' }}
+              onClick={() => setIdx(i => i + 1)}>
+              ›
+            </button>
+          )}
+
+          {/* Contador */}
+          <div
+            className="absolute top-2 right-2 px-2 py-0.5 rounded-full text-xs font-medium text-white"
+            style={{ background: 'rgba(0,0,0,0.55)' }}>
+            {idx + 1}/{imgs.length}
+          </div>
+
+          {/* Dots */}
+          <div className="absolute bottom-2.5 left-0 right-0 flex justify-center gap-1.5">
+            {imgs.map((_, i) => (
+              <button
+                key={i}
+                onClick={() => setIdx(i)}
+                className="w-1.5 h-1.5 rounded-full transition-all"
+                style={{ background: i === idx ? '#fff' : 'rgba(255,255,255,0.4)' }}
+              />
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
 // ── FileGrid ──────────────────────────────────────────────────────────────────
 function FileGrid({ files }: { files: PostFile[] }) {
-  const [lightbox, setLightbox] = useState<string | null>(null)
+  const [lightbox, setLightbox] = useState<{ urls: string[]; index: number } | null>(null)
   const imgs   = files.filter(f => isImage(f.type))
   const vids   = files.filter(f => isVideo(f.type))
   const links  = files.filter(f => isLink(f.type))
@@ -70,27 +232,24 @@ function FileGrid({ files }: { files: PostFile[] }) {
 
   if (!files.length) return null
 
+  const imgUrls = imgs.map(f => f.url)
+
   return (
     <div className="space-y-2">
-      {lightbox && <Lightbox url={lightbox} onClose={() => setLightbox(null)} />}
+      {lightbox && (
+        <Lightbox urls={lightbox.urls} startIndex={lightbox.index} onClose={() => setLightbox(null)} />
+      )}
 
       {/* Imagens */}
       {imgs.length > 0 && (
-        <div className={`grid gap-1.5 ${imgs.length === 1 ? 'grid-cols-1' : 'grid-cols-2'}`}>
-          {imgs.map((f, i) => (
-            <div key={i} className="relative rounded-xl overflow-hidden cursor-pointer"
-              style={{ height: imgs.length === 1 ? '220px' : '120px' }}
-              onClick={() => setLightbox(f.url)}>
-              <img src={f.url} alt={f.name} className="w-full h-full object-cover" />
-              {i === 3 && imgs.length > 4 && (
-                <div className="absolute inset-0 flex items-center justify-center text-white font-bold text-lg"
-                  style={{ background: 'rgba(0,0,0,0.55)' }}>
-                  +{imgs.length - 4}
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
+        imgs.length === 1 ? (
+          <div className="relative rounded-xl overflow-hidden cursor-pointer" style={{ height: '240px' }}
+            onClick={() => setLightbox({ urls: imgUrls, index: 0 })}>
+            <img src={imgs[0].url} alt={imgs[0].name} className="w-full h-full object-cover" />
+          </div>
+        ) : (
+          <ImageCarousel imgs={imgs} onOpen={i => setLightbox({ urls: imgUrls, index: i })} />
+        )
       )}
 
       {/* Vídeos */}

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
@@ -8,7 +8,7 @@ import { createClient } from '@/lib/supabase/client'
 export default function SignupPage() {
   const router = useRouter()
   const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
+  const passwordRef = useRef<HTMLInputElement>(null)
   const [name, setName] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
@@ -18,6 +18,7 @@ export default function SignupPage() {
     setError('')
     setLoading(true)
 
+    const password = passwordRef.current?.value ?? ''
     const supabase = createClient()
     const { error } = await supabase.auth.signUp({
       email,
@@ -78,8 +79,7 @@ export default function SignupPage() {
                 type="password"
                 required
                 minLength={6}
-                value={password}
-                onChange={e => setPassword(e.target.value)}
+                ref={passwordRef}
                 className="w-full px-3 py-2 rounded-lg text-sm text-white outline-none focus:ring-2 transition-all"
                 style={{ background: 'var(--surface-2)', border: '1px solid var(--border)' }}
                 placeholder="••••••••"

@@ -133,7 +133,6 @@ function buildGoogleCalendarUrl(pauta: Pauta, clientName?: string): string {
 // auto: true → gerido automaticamente, não aparece no banner de pendências
 const PIPELINE_ETAPAS: { key: string; label: string; pautaTipo: string; dot: string }[] = [
   { key: 'planejamento', label: 'Planejamento', pautaTipo: 'planejamento', dot: '#9FA4DB' },
-  { key: 'captacao',     label: 'Captação',      pautaTipo: 'captacao',     dot: '#fb923c' },
   { key: 'edicao',       label: 'Edição',        pautaTipo: 'edicao_video', dot: '#e879f9' },
   { key: 'design',       label: 'Design',         pautaTipo: 'edicao_cards', dot: '#2dd4bf' },
   { key: 'agendamento',  label: 'Agendamento',   pautaTipo: 'agendamento',  dot: '#fbbf24' },
@@ -221,12 +220,11 @@ export default function PautasView({ initialPautas, clients, profiles, producao:
     const captacaoIds = new Set(captacaoTeam.map(p => p.id))
 
     // Filtra clientes relevantes para este utilizador:
-    // - Exclui clientes atribuídos exclusivamente a captação (esses aparecem na barra de captações)
+    // - Exclui clientes com qualquer membro de captação como responsável (esses ficam na barra de captações)
     // - Para não-admin, mostra apenas os clientes do próprio utilizador
     const relevantClients = clients.filter(c => {
       const responsible = c.responsible_ids ?? []
-      const nonCaptacaoResponsibles = responsible.filter(id => !captacaoIds.has(id))
-      if (responsible.length > 0 && nonCaptacaoResponsibles.length === 0) return false
+      if (responsible.some(id => captacaoIds.has(id))) return false
       if (userRole !== 'admin' && !responsible.includes(currentUserId)) return false
       return true
     })

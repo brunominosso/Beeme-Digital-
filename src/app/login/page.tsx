@@ -1,13 +1,13 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 
 export default function LoginPage() {
   const router = useRouter()
   const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
+  const passwordRef = useRef<HTMLInputElement>(null)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
@@ -16,6 +16,7 @@ export default function LoginPage() {
     setError('')
     setLoading(true)
 
+    const password = passwordRef.current?.value ?? ''
     const supabase = createClient()
     const { error } = await supabase.auth.signInWithPassword({ email, password })
 
@@ -223,8 +224,7 @@ export default function LoginPage() {
                 <input
                   type="password"
                   required
-                  value={password}
-                  onChange={e => setPassword(e.target.value)}
+                  ref={passwordRef}
                   placeholder="••••••••"
                   style={{
                     width: '100%',
