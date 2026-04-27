@@ -395,9 +395,15 @@ export default function ApprovalClient({
           <div className="rounded-2xl p-8 text-center" style={{ background: '#1c1c22', border: '1px solid #2a2a35' }}>
             <div className="text-4xl mb-3">🎉</div>
             <p className="font-semibold text-white mb-1">Nenhum card pendente!</p>
-            <p className="text-sm" style={{ color: '#9ca3af' }}>
+            <p className="text-sm mb-5" style={{ color: '#9ca3af' }}>
               Novos conteúdos aparecerão aqui quando estiverem prontos.
             </p>
+            <button
+              onClick={() => window.location.reload()}
+              className="text-sm font-semibold px-4 py-2.5 rounded-xl"
+              style={{ background: '#6c63ff20', color: '#a78bfa', border: '1px solid #6c63ff30' }}>
+              Verificar novos conteúdos
+            </button>
           </div>
         )}
 
@@ -405,9 +411,15 @@ export default function ApprovalClient({
           <div className="rounded-2xl p-8 text-center" style={{ background: '#1c1c22', border: '1px solid #2a2a35' }}>
             <div className="text-4xl mb-3">✅</div>
             <p className="font-semibold text-white mb-1">Tudo avaliado!</p>
-            <p className="text-sm" style={{ color: '#9ca3af' }}>
+            <p className="text-sm mb-5" style={{ color: '#9ca3af' }}>
               Obrigado pelo retorno. Nossa equipe já foi notificada.
             </p>
+            <button
+              onClick={() => window.location.reload()}
+              className="text-sm font-semibold px-4 py-2.5 rounded-xl"
+              style={{ background: '#6c63ff20', color: '#a78bfa', border: '1px solid #6c63ff30' }}>
+              Verificar novos conteúdos
+            </button>
           </div>
         )}
 

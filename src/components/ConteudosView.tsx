@@ -103,6 +103,7 @@ function PostModal({ post, clients, profiles, onClose, onSave, userRole }: {
   const [showLinkInput, setShowLinkInput] = useState(false)
   const [linkInput,     setLinkInput]     = useState('')
   const [saving,        setSaving]        = useState(false)
+  const [saveError,     setSaveError]     = useState('')
   const [caption,       setCaption]       = useState(post.caption ?? '')
   const [cta,           setCta]           = useState(post.cta ?? '')
   const [hashtags,      setHashtags]      = useState<string[]>(post.hashtags ?? [])
@@ -129,7 +130,13 @@ function PostModal({ post, clients, profiles, onClose, onSave, userRole }: {
       if (!signRes.ok) throw new Error('auth')
       signData = await signRes.json()
     } catch {
-      alert('Erro ao autenticar upload. Tenta novamente.')
+      alert('Erro ao autenticar upload. Verifique a ligação à internet e tenta novamente.')
+      setUploading(false)
+      return
+    }
+
+    if (!signData?.cloud_name) {
+      alert('Configuração de upload em falta. Contacte o administrador do sistema.')
       setUploading(false)
       return
     }
@@ -242,7 +249,7 @@ function PostModal({ post, clients, profiles, onClose, onSave, userRole }: {
 
           xhr.onerror = () => {
             setUploadProgress(null)
-            alert(`Erro ao enviar ${file.name}: falha de ligação`)
+            alert(`Erro ao enviar "${file.name}". Verifique a ligação à internet e tenta novamente. Se o erro persistir, o ficheiro pode ser grande demais ou o serviço estar temporariamente indisponível.`)
             resolve()
           }
 
@@ -262,6 +269,11 @@ function PostModal({ post, clients, profiles, onClose, onSave, userRole }: {
 
   async function handleSave() {
     if (!title.trim()) return
+    if (status === 'cliente_aprovacao' && !clientId) {
+      setSaveError('Vincule um cliente antes de enviar para aprovação.')
+      return
+    }
+    setSaveError('')
     setSaving(true)
     const supabase = createClient()
     const payload = {
@@ -693,7 +705,13 @@ function PostModal({ post, clients, profiles, onClose, onSave, userRole }: {
           </div>
         </div>
 
-        <div className="px-6 py-4 border-t flex gap-2 justify-end" style={{ borderColor: 'var(--border)' }}>
+        <div className="px-6 py-4 border-t flex flex-col gap-3" style={{ borderColor: 'var(--border)' }}>
+          {saveError && (
+            <p className="text-xs px-3 py-2 rounded-lg" style={{ background: '#ef444420', color: '#f87171', border: '1px solid #ef444430' }}>
+              ⚠ {saveError}
+            </p>
+          )}
+          <div className="flex gap-2 justify-end">
           <button onClick={onClose} className="px-4 py-2 rounded-lg text-sm" style={{ background: 'var(--surface-2)', color: 'var(--text-muted)' }}>
             Cancelar
           </button>
@@ -702,6 +720,7 @@ function PostModal({ post, clients, profiles, onClose, onSave, userRole }: {
             style={{ background: 'var(--accent)' }}>
             {saving ? 'A guardar...' : isNew ? 'Criar post' : 'Guardar'}
           </button>
+          </div>
         </div>
       </div>
     </div>
@@ -987,8 +1006,9 @@ function KanbanView({ posts: initialPosts, clients, profiles, onEdit, userRole }
   posts: Post[]; clients: SimpleClient[]; profiles: SimpleProfile[]; onEdit: (p: Post) => void; userRole?: string
 }) {
   const [posts,    setPosts]    = useState(initialPosts)
-  const [dragging, setDragging] = useState<string | null>(null)
-  const [dragOver, setDragOver] = useState<string | null>(null)
+  const [dragging,   setDragging]   = useState<string | null>(null)
+  const [dragOver,   setDragOver]   = useState<string | null>(null)
+  const [moveError,  setMoveError]  = useState('')
 
   const ADMIN_KANBAN_COLS: KanbanCol[] = [
     { key: 'sm_novo',      label: 'Novo',              color: '#6b7280', displayStatuses: ['sm_novo'],                     dropStatus: 'sm_novo' },
@@ -1009,6 +1029,11 @@ function KanbanView({ posts: initialPosts, clients, profiles, onEdit, userRole }
     const post = posts.find(p => p.id === postId)
     const oldStatus = post?.status
     if (oldStatus === newStatus) return
+    if (newStatus === 'cliente_aprovacao' && !(post as any)?.client_id) {
+      setMoveError('Este card não tem cliente vinculado. Abra o card e adicione um cliente antes de enviar para aprovação.')
+      setTimeout(() => setMoveError(''), 5000)
+      return
+    }
     setPosts(prev => prev.map(p => p.id === postId ? { ...p, status: newStatus } : p))
     const supabase = createClient()
     await supabase.from('posts').update({ status: newStatus }).eq('id', postId)
@@ -1045,6 +1070,13 @@ function KanbanView({ posts: initialPosts, clients, profiles, onEdit, userRole }
   // ── Quadro de role (SM / Designer) ──────────────────────────────────────────
   if (roleCols) {
     return (
+      <div className="relative">
+      {moveError && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-4 py-3 rounded-xl text-sm font-medium shadow-xl"
+          style={{ background: '#1c1c22', border: '1px solid #ef4444', color: '#f87171', maxWidth: '420px', textAlign: 'center' }}>
+          ⚠ {moveError}
+        </div>
+      )}
       <div className="flex gap-4 overflow-x-auto pb-2" style={{ height: 'calc(100vh - 180px)' }}>
         {roleCols.map(col => {
           const colPosts = posts.filter(p => col.displayStatuses.includes(p.status))
@@ -1101,6 +1133,7 @@ function KanbanView({ posts: initialPosts, clients, profiles, onEdit, userRole }
             </div>
           )
         })}
+      </div>
       </div>
     )
   }
