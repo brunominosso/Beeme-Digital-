@@ -241,16 +241,21 @@ export default function PautasView({ initialPautas, clients, profiles, producao:
 
     return relevantClients
       .map(c => {
-        const faltam = PIPELINE_ETAPAS.filter(e => {
-          // Etapa está pendente se não existe pauta activa no mês visualizado
-          const hasActivePauta = pautas.some(p =>
+        const responsible = c.responsible_ids ?? []
+        const hasCaptacao = responsible.some(id => captacaoIds.has(id))
+        const etapas = hasCaptacao
+          ? [...PIPELINE_ETAPAS, { key: 'captacao', label: 'Captação Externa', pautaTipo: 'captacao', dot: '#fb923c' }]
+          : PIPELINE_ETAPAS
+
+        const faltam = etapas.filter(e => {
+          const hasScheduled = pautas.some(p =>
             p.client_id === c.id &&
             p.tipo === e.pautaTipo &&
-            (p.status === 'pendente' || p.status === 'em_andamento') &&
+            p.status !== 'cancelado' &&
             p.data >= viewMonthStart &&
             p.data <= viewMonthEnd
           )
-          return !hasActivePauta
+          return !hasScheduled
         })
         return { client: c, faltam }
       })
