@@ -20,23 +20,21 @@ export default async function PautasPage({ searchParams }: { searchParams: Promi
 
   // Mês visualizado: lido da URL (?month=YYYY-MM) ou mês corrente
   const { month } = await searchParams
-  let viewedYear = new Date().getFullYear()
-  let viewedMonth = new Date().getMonth() // 0-indexed
+  const now = new Date()
+  let viewedYear = now.getFullYear()
+  let viewedMonth = now.getMonth() // 0-indexed
 
   if (month && /^\d{4}-\d{2}$/.test(month)) {
     const [y, m] = month.split('-').map(Number)
     viewedYear = y
-    viewedMonth = m - 1 // converter para 0-indexed
+    viewedMonth = m - 1
   }
 
-  // Range de pautas: 2 meses antes até 3 meses depois do mês visualizado
+  // Range: 2 meses antes até 3 meses depois do mês visualizado
   const rangeStart = localDateStr(viewedYear, viewedMonth - 2, 1)
-  const rangeEnd = localDateStr(viewedYear, viewedMonth + 4, 0) // dia 0 = último dia do mês anterior
+  const rangeEnd   = localDateStr(viewedYear, viewedMonth + 4, 0)
 
-  // Mês de referência do pipeline = mês visualizado
-  const refMonthStr = localDateStr(viewedYear, viewedMonth, 1)
-
-  // Data inicial do weekRef para o cliente (dia 15 do mês visualizado para evitar timezone edge)
+  const refMonthStr   = localDateStr(viewedYear, viewedMonth, 1)
   const initialWeekRef = localDateStr(viewedYear, viewedMonth, 15)
 
   const [
@@ -55,12 +53,50 @@ export default async function PautasPage({ searchParams }: { searchParams: Promi
     supabase.from('producao_mensal').select('*').eq('mes', refMonthStr),
   ])
 
+  // ── Auto-recorrência mensal ──────────────────────────────────────────────────
+  // Se o mês visualizado está vazio mas o mês anterior tem pautas,
+  // copia automaticamente com as datas ajustadas (+1 mês, mesmo dia).
+  let allPautas: Pauta[] = (rawPautas as Pauta[]) ?? []
+
+  const viewedMonthStart = localDateStr(viewedYear, viewedMonth, 1)
+  const viewedMonthEnd   = localDateStr(viewedYear, viewedMonth + 1, 0)
+  const prevMonthStart   = localDateStr(viewedYear, viewedMonth - 1, 1)
+  const prevMonthEnd     = localDateStr(viewedYear, viewedMonth, 0)
+
+  const viewedEmpty    = !allPautas.some(p => p.data >= viewedMonthStart && p.data <= viewedMonthEnd)
+  const prevMonthPautas = allPautas.filter(p => p.data >= prevMonthStart && p.data <= prevMonthEnd)
+
+  // Só copia para o mês atual ou futuros (não retroativo)
+  const isCurrentOrFuture = viewedYear > now.getFullYear() ||
+    (viewedYear === now.getFullYear() && viewedMonth >= now.getMonth())
+
+  if (viewedEmpty && prevMonthPautas.length > 0 && isCurrentOrFuture) {
+    const lastDayOfViewedMonth = new Date(viewedYear, viewedMonth + 1, 0).getDate()
+
+    const toInsert = prevMonthPautas.map(p => {
+      const dayOfMonth = parseInt(p.data.split('-')[2], 10)
+      const clampedDay = Math.min(dayOfMonth, lastDayOfViewedMonth)
+      return {
+        assignee_id: p.assignee_id,
+        client_id:   p.client_id,
+        tipo:        p.tipo,
+        turno:       p.turno,
+        notas:       p.notas,
+        status:      'pendente' as const,
+        data:        localDateStr(viewedYear, viewedMonth, clampedDay),
+        created_by:  user!.id,
+      }
+    })
+
+    const { data: created } = await supabase.from('pautas').insert(toInsert).select()
+    if (created) allPautas = [...allPautas, ...(created as Pauta[])]
+  }
+  // ────────────────────────────────────────────────────────────────────────────
+
   const teamIds = (rawProfiles ?? [])
     .filter((p: any) => p.role === 'social_media' || p.role === 'designer' || p.role === 'captacao')
     .map((p: any) => p.id)
 
-  // Admin: todos os clientes com equipa como responsável
-  // Não-admin: apenas os clientes onde o próprio utilizador é responsável
   let activeClients: any[]
   if (userRole === 'admin') {
     const filteredByTeam = (rawClients ?? []).filter((c: any) =>
@@ -75,7 +111,7 @@ export default async function PautasPage({ searchParams }: { searchParams: Promi
 
   return (
     <PautasView
-      initialPautas={(rawPautas as Pauta[]) ?? []}
+      initialPautas={allPautas}
       clients={activeClients as Pick<Client, 'id' | 'name' | 'status' | 'responsible_ids'>[]}
       profiles={(rawProfiles as Pick<Profile, 'id' | 'name' | 'role' | 'avatar_color'>[]) ?? []}
       producao={(rawProducao as ProducaoMensal[]) ?? []}
