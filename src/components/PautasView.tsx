@@ -275,7 +275,7 @@ export default function PautasView({ initialPautas, clients, profiles, producao:
           p.client_id === c.id &&
           p.assignee_id === person.id &&
           p.tipo === 'captacao' &&
-          (p.status === 'pendente' || p.status === 'em_andamento') &&
+          p.status !== 'cancelado' &&
           p.data >= viewMonthStart &&
           p.data <= viewMonthEnd
         ))
