@@ -230,13 +230,13 @@ export default function PautasView({ initialPautas, clients, profiles, producao:
     const captacaoIds = new Set(captacaoTeam.map(p => p.id))
 
     // Filtra clientes relevantes para este utilizador:
-    // - Exclui clientes com qualquer membro de captação como responsável (esses ficam na barra de captações)
-    // - Para não-admin, mostra apenas os clientes do próprio utilizador
+    // - Não-admin: mostra TODOS os clientes onde o utilizador é responsável (independente de captação)
+    // - Admin: exclui clientes onde SÓ há captação como responsável (esses ficam na barra de captações)
     const relevantClients = clients.filter(c => {
       const responsible = c.responsible_ids ?? []
-      if (responsible.some(id => captacaoIds.has(id))) return false
-      if (userRole !== 'admin' && !responsible.includes(currentUserId)) return false
-      return true
+      if (userRole !== 'admin') return responsible.includes(currentUserId)
+      const hasNonCaptacao = responsible.some(id => !captacaoIds.has(id))
+      return hasNonCaptacao
     })
 
     return relevantClients

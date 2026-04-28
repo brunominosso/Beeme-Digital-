@@ -34,7 +34,7 @@ export default async function PautasPage({ searchParams }: { searchParams: Promi
   const rangeStart = localDateStr(viewedYear, viewedMonth - 2, 1)
   const rangeEnd   = localDateStr(viewedYear, viewedMonth + 4, 0)
 
-  const refMonthStr   = localDateStr(viewedYear, viewedMonth, 1)
+  const refMonthStr    = localDateStr(viewedYear, viewedMonth, 1)
   const initialWeekRef = localDateStr(viewedYear, viewedMonth, 15)
 
   const [
@@ -52,46 +52,6 @@ export default async function PautasPage({ searchParams }: { searchParams: Promi
     supabase.from('profiles').select('id, name, role, avatar_color').order('name'),
     supabase.from('producao_mensal').select('*').eq('mes', refMonthStr),
   ])
-
-  // ── Auto-recorrência mensal ──────────────────────────────────────────────────
-  // Se o mês visualizado está vazio mas o mês anterior tem pautas,
-  // copia automaticamente com as datas ajustadas (+1 mês, mesmo dia).
-  let allPautas: Pauta[] = (rawPautas as Pauta[]) ?? []
-
-  const viewedMonthStart = localDateStr(viewedYear, viewedMonth, 1)
-  const viewedMonthEnd   = localDateStr(viewedYear, viewedMonth + 1, 0)
-  const prevMonthStart   = localDateStr(viewedYear, viewedMonth - 1, 1)
-  const prevMonthEnd     = localDateStr(viewedYear, viewedMonth, 0)
-
-  const viewedEmpty    = !allPautas.some(p => p.data >= viewedMonthStart && p.data <= viewedMonthEnd)
-  const prevMonthPautas = allPautas.filter(p => p.data >= prevMonthStart && p.data <= prevMonthEnd)
-
-  // Só copia para o mês atual ou futuros (não retroativo)
-  const isCurrentOrFuture = viewedYear > now.getFullYear() ||
-    (viewedYear === now.getFullYear() && viewedMonth >= now.getMonth())
-
-  if (viewedEmpty && prevMonthPautas.length > 0 && isCurrentOrFuture) {
-    const lastDayOfViewedMonth = new Date(viewedYear, viewedMonth + 1, 0).getDate()
-
-    const toInsert = prevMonthPautas.map(p => {
-      const dayOfMonth = parseInt(p.data.split('-')[2], 10)
-      const clampedDay = Math.min(dayOfMonth, lastDayOfViewedMonth)
-      return {
-        assignee_id: p.assignee_id,
-        client_id:   p.client_id,
-        tipo:        p.tipo,
-        turno:       p.turno,
-        notas:       p.notas,
-        status:      'pendente' as const,
-        data:        localDateStr(viewedYear, viewedMonth, clampedDay),
-        created_by:  user!.id,
-      }
-    })
-
-    const { data: created } = await supabase.from('pautas').insert(toInsert).select()
-    if (created) allPautas = [...allPautas, ...(created as Pauta[])]
-  }
-  // ────────────────────────────────────────────────────────────────────────────
 
   const teamIds = (rawProfiles ?? [])
     .filter((p: any) => p.role === 'social_media' || p.role === 'designer' || p.role === 'captacao')
@@ -111,7 +71,7 @@ export default async function PautasPage({ searchParams }: { searchParams: Promi
 
   return (
     <PautasView
-      initialPautas={allPautas}
+      initialPautas={(rawPautas as Pauta[]) ?? []}
       clients={activeClients as Pick<Client, 'id' | 'name' | 'status' | 'responsible_ids'>[]}
       profiles={(rawProfiles as Pick<Profile, 'id' | 'name' | 'role' | 'avatar_color'>[]) ?? []}
       producao={(rawProducao as ProducaoMensal[]) ?? []}
