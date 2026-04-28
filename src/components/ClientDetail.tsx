@@ -227,11 +227,15 @@ export default function ClientDetail({
   profiles,
   meetings: initialMeetings,
   tasks: initialTasks,
+  backHref = '/leads',
+  backLabel = '← Leads & Clientes',
 }: {
   client: Client
   profiles: Profile[]
   meetings: Meeting[]
   tasks: Task[]
+  backHref?: string
+  backLabel?: string
 }) {
   const router = useRouter()
   const [client, setClient] = useState(initialClient)
@@ -398,7 +402,7 @@ export default function ClientDetail({
     <div className="flex flex-col min-h-screen">
       {/* Header */}
       <div className="px-8 py-5 border-b" style={{ borderColor: 'var(--border)' }}>
-        <Link href="/leads" className="text-xs mb-3 inline-block" style={{ color: 'var(--text-muted)' }}>← Leads & Clientes</Link>
+        <Link href={backHref} className="text-xs mb-3 inline-block" style={{ color: 'var(--text-muted)' }}>{backLabel}</Link>
         <div className="flex items-start gap-5">
           {/* Logo */}
           <div className="w-16 h-16 rounded-xl overflow-hidden shrink-0 flex items-center justify-center text-xl font-bold"

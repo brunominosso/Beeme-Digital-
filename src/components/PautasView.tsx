@@ -72,7 +72,10 @@ function getWeekDays(referenceDate: Date): Date[] {
 }
 
 function toDateStr(d: Date): string {
-  return d.toISOString().split('T')[0]
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
 }
 
 function formatWeekRange(days: Date[]): string {
@@ -146,9 +149,10 @@ interface Props {
   refMonthStr?: string
   userRole: string
   currentUserId: string
+  initialWeekRef?: string
 }
 
-export default function PautasView({ initialPautas, clients, profiles, producao: initialProducao = [], refMonthStr, userRole, currentUserId }: Props) {
+export default function PautasView({ initialPautas, clients, profiles, producao: initialProducao = [], refMonthStr, userRole, currentUserId, initialWeekRef }: Props) {
   const router = useRouter()
   const [pautas, setPautas] = useState<Pauta[]>(initialPautas)
   const [producao, setProducao] = useState<ProducaoMensal[]>(initialProducao)
@@ -164,7 +168,13 @@ export default function PautasView({ initialPautas, clients, profiles, producao:
   // Sincroniza estado local com dados frescos do servidor após cada refresh
   useEffect(() => { setPautas(initialPautas) }, [initialPautas])
   useEffect(() => { setProducao(initialProducao) }, [initialProducao])
-  const [weekRef, setWeekRef] = useState<Date>(new Date())
+  const [weekRef, setWeekRef] = useState<Date>(() => {
+    if (initialWeekRef) {
+      const d = new Date(initialWeekRef + 'T12:00:00')
+      if (!isNaN(d.getTime())) return d
+    }
+    return new Date()
+  })
   const [showForm, setShowForm] = useState(false)
   const [selected, setSelected] = useState<Pauta | null>(null)
   const [filterRole, setFilterRole] = useState<'todos' | 'social_media' | 'designer'>('todos')
@@ -214,8 +224,8 @@ export default function PautasView({ initialPautas, clients, profiles, producao:
   // Pendências do pipeline por cliente
   // Mostra etapas que ainda não estão concluídas (exclui etapas automáticas)
   const pendencias = useMemo(() => {
-    const viewMonthStart = new Date(weekRef.getFullYear(), weekRef.getMonth(), 1).toISOString().split('T')[0]
-    const viewMonthEnd   = new Date(weekRef.getFullYear(), weekRef.getMonth() + 1, 0).toISOString().split('T')[0]
+    const viewMonthStart = toDateStr(new Date(weekRef.getFullYear(), weekRef.getMonth(), 1))
+    const viewMonthEnd   = toDateStr(new Date(weekRef.getFullYear(), weekRef.getMonth() + 1, 0))
 
     const captacaoIds = new Set(captacaoTeam.map(p => p.id))
 
@@ -256,8 +266,8 @@ export default function PautasView({ initialPautas, clients, profiles, producao:
 
   // Clientes de captação sem pauta agendada no mês visualizado
   const captacaoPendentes = useMemo(() => {
-    const viewMonthStart = new Date(weekRef.getFullYear(), weekRef.getMonth(), 1).toISOString().split('T')[0]
-    const viewMonthEnd   = new Date(weekRef.getFullYear(), weekRef.getMonth() + 1, 0).toISOString().split('T')[0]
+    const viewMonthStart = toDateStr(new Date(weekRef.getFullYear(), weekRef.getMonth(), 1))
+    const viewMonthEnd   = toDateStr(new Date(weekRef.getFullYear(), weekRef.getMonth() + 1, 0))
     return captacaoTeam.flatMap(person =>
       clients
         .filter(c => (c.responsible_ids ?? []).includes(person.id))
@@ -306,28 +316,30 @@ export default function PautasView({ initialPautas, clients, profiles, producao:
 
   const monthWeeks = useMemo(() => getMonthWeeks(weekRef), [weekRef])
 
-  function prevWeek() {
-    const d = new Date(weekRef)
-    d.setDate(d.getDate() - 7)
+  function navTo(d: Date) {
     setWeekRef(d)
+    const m = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+    router.replace(`/pautas?month=${m}`, { scroll: false })
+  }
+
+  function prevWeek() {
+    const d = new Date(weekRef); d.setDate(d.getDate() - 7); navTo(d)
   }
 
   function nextWeek() {
-    const d = new Date(weekRef)
-    d.setDate(d.getDate() + 7)
-    setWeekRef(d)
+    const d = new Date(weekRef); d.setDate(d.getDate() + 7); navTo(d)
   }
 
   function goToday() {
-    setWeekRef(new Date())
+    navTo(new Date())
   }
 
   function prevMonth() {
-    const d = new Date(weekRef); d.setMonth(d.getMonth() - 1); setWeekRef(d)
+    const d = new Date(weekRef); d.setDate(1); d.setMonth(d.getMonth() - 1); navTo(d)
   }
 
   function nextMonth() {
-    const d = new Date(weekRef); d.setMonth(d.getMonth() + 1); setWeekRef(d)
+    const d = new Date(weekRef); d.setDate(1); d.setMonth(d.getMonth() + 1); navTo(d)
   }
 
   function openCreate(data?: string, assigneeId?: string, turno?: string) {

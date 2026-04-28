@@ -4,7 +4,12 @@ import type { Pauta, Client, Profile, ProducaoMensal } from '@/types/database'
 
 export const dynamic = 'force-dynamic'
 
-export default async function PautasPage() {
+function localDateStr(year: number, month: number, day: number): string {
+  const d = new Date(year, month, day)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+export default async function PautasPage({ searchParams }: { searchParams: Promise<{ month?: string }> }) {
   const supabase = await createClient()
 
   const { data: { user } } = await supabase.auth.getUser()
@@ -13,15 +18,26 @@ export default async function PautasPage() {
 
   const userRole = (rawProfile as any)?.role ?? 'social_media'
 
-  const rangeStart = new Date()
-  rangeStart.setDate(rangeStart.getDate() - 30)
-  const rangeEnd = new Date()
-  rangeEnd.setDate(rangeEnd.getDate() + 90)
+  // Mês visualizado: lido da URL (?month=YYYY-MM) ou mês corrente
+  const { month } = await searchParams
+  let viewedYear = new Date().getFullYear()
+  let viewedMonth = new Date().getMonth() // 0-indexed
 
-  // Mês de referência do pipeline (próximo mês)
-  const now = new Date()
-  const refMonthStr = new Date(now.getFullYear(), now.getMonth() + 1, 1)
-    .toISOString().split('T')[0]
+  if (month && /^\d{4}-\d{2}$/.test(month)) {
+    const [y, m] = month.split('-').map(Number)
+    viewedYear = y
+    viewedMonth = m - 1 // converter para 0-indexed
+  }
+
+  // Range de pautas: 2 meses antes até 3 meses depois do mês visualizado
+  const rangeStart = localDateStr(viewedYear, viewedMonth - 2, 1)
+  const rangeEnd = localDateStr(viewedYear, viewedMonth + 4, 0) // dia 0 = último dia do mês anterior
+
+  // Mês de referência do pipeline = mês visualizado
+  const refMonthStr = localDateStr(viewedYear, viewedMonth, 1)
+
+  // Data inicial do weekRef para o cliente (dia 15 do mês visualizado para evitar timezone edge)
+  const initialWeekRef = localDateStr(viewedYear, viewedMonth, 15)
 
   const [
     { data: rawPautas },
@@ -30,8 +46,8 @@ export default async function PautasPage() {
     { data: rawProducao },
   ] = await Promise.all([
     supabase.from('pautas').select('*')
-      .gte('data', rangeStart.toISOString().split('T')[0])
-      .lte('data', rangeEnd.toISOString().split('T')[0])
+      .gte('data', rangeStart)
+      .lte('data', rangeEnd)
       .order('data').order('turno'),
     supabase.from('clients').select('id, name, status, responsible_ids')
       .eq('status', 'ativo').order('name'),
@@ -66,6 +82,7 @@ export default async function PautasPage() {
       refMonthStr={refMonthStr}
       userRole={userRole}
       currentUserId={user!.id}
+      initialWeekRef={initialWeekRef}
     />
   )
 }
