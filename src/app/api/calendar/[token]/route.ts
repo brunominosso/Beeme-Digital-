@@ -9,6 +9,19 @@ const PRIORITY_EMOJI: Record<string, string> = {
   low:    '⚪',
 }
 
+const TIPO_LABEL: Record<string, string> = {
+  social_media: 'Social Media',
+  designer:     'Design',
+  videomaker:   'Vídeo',
+  captacao:     'Captação',
+}
+
+const TURNO_LABEL: Record<string, string> = {
+  manha: 'Manhã',
+  tarde: 'Tarde',
+  noite: 'Noite',
+}
+
 function icalDate(dateStr: string, timeStr?: string | null): string {
   const d = dateStr.replace(/-/g, '')
   if (timeStr) {
@@ -45,7 +58,7 @@ export async function GET(
 
   const supabase = await createClient()
 
-  const [{ data: tasks }, { data: profile }, { data: clients }] = await Promise.all([
+  const [{ data: tasks }, { data: profile }, { data: clients }, { data: pautas }] = await Promise.all([
     supabase
       .from('tasks')
       .select('*')
@@ -54,13 +67,19 @@ export async function GET(
       .order('due_date', { ascending: true, nullsFirst: false }),
     supabase.from('profiles').select('name').eq('id', userId).single(),
     supabase.from('clients').select('id, name'),
+    supabase
+      .from('pautas')
+      .select('*')
+      .eq('assignee_id', userId)
+      .neq('status', 'cancelado')
+      .order('data', { ascending: true }),
   ])
 
   const clientMap = Object.fromEntries((clients ?? []).map((c: any) => [c.id, c.name]))
   const userName = (profile as any)?.name ?? 'Equipa'
   const dtstamp = formatDtstamp()
 
-  const events = (tasks ?? []).map((task: any) => {
+  const taskEvents = (tasks ?? []).map((task: any) => {
     const emoji = PRIORITY_EMOJI[task.priority] ?? '⚪'
     const clientName = task.client_id ? clientMap[task.client_id] : null
     const title = clientName
@@ -119,24 +138,54 @@ export async function GET(
     ].join('\r\n')
   })
 
+  const pautaEvents = (pautas ?? []).map((pauta: any) => {
+    const clientName = pauta.client_id ? clientMap[pauta.client_id] : null
+    const tipoLabel = TIPO_LABEL[pauta.tipo] ?? pauta.tipo
+    const turnoLabel = TURNO_LABEL[pauta.turno] ?? pauta.turno
+
+    const title = clientName
+      ? `📋 ${tipoLabel} — ${clientName}`
+      : `📋 ${tipoLabel}`
+
+    const descParts: string[] = []
+    if (clientName) descParts.push(`Cliente: ${clientName}`)
+    descParts.push(`Turno: ${turnoLabel}`)
+    descParts.push(`Tipo: ${tipoLabel}`)
+    if (pauta.notas) descParts.push(`Notas: ${pauta.notas}`)
+    const description = escapeIcal(descParts.join('\\n'))
+
+    return [
+      'BEGIN:VEVENT',
+      `UID:pauta-${pauta.id}@beemedigital`,
+      `DTSTAMP:${dtstamp}`,
+      `DTSTART;VALUE=DATE:${icalDate(pauta.data)}`,
+      `DTEND;VALUE=DATE:${icalNextDay(pauta.data)}`,
+      `SUMMARY:${escapeIcal(title)}`,
+      `DESCRIPTION:${description}`,
+      'STATUS:NEEDS-ACTION',
+      'END:VEVENT',
+    ].join('\r\n')
+  })
+
   const ical = [
     'BEGIN:VCALENDAR',
     'VERSION:2.0',
     'PRODID:-//Beeme Digital//Sistema//PT-BR',
     'CALSCALE:GREGORIAN',
     'METHOD:PUBLISH',
-    `X-WR-CALNAME:Tarefas — ${escapeIcal(userName)}`,
+    `X-WR-CALNAME:Beeme — ${escapeIcal(userName)}`,
     'X-WR-TIMEZONE:America/Sao_Paulo',
     'REFRESH-INTERVAL;VALUE=DURATION:PT1H',
     'X-PUBLISHED-TTL:PT1H',
-    ...events,
+    ...taskEvents,
+    ...pautaEvents,
     'END:VCALENDAR',
   ].join('\r\n')
 
   return new NextResponse(ical, {
     headers: {
       'Content-Type': 'text/calendar; charset=utf-8',
-      'Content-Disposition': 'inline; filename="tarefas.ics"',
+      'Content-Disposition': 'inline; filename="beeme.ics"',
       'Cache-Control': 'no-cache, no-store',
     },
   })
