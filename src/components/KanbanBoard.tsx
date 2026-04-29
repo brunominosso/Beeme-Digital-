@@ -140,14 +140,16 @@ export default function KanbanBoard({
   currentUserId,
   assignableProfileIds,
   hideAssignee = false,
+  calendarToken,
 }: {
   initialTasks: TaskWithRelations[]
   clients: Pick<Client, 'id' | 'name' | 'status' | 'responsible_ids'>[]
   profiles: Pick<Profile, 'id' | 'name' | 'avatar_color'>[]
   userRole?: string
   currentUserId?: string
-  assignableProfileIds?: string[] | null  // null = sem restrição (admin)
+  assignableProfileIds?: string[] | null
   hideAssignee?: boolean
+  calendarToken?: string
 }) {
   const columns: ColConfig[] =
     userRole === 'social_media' ? SM_COLUMNS :
@@ -161,6 +163,16 @@ export default function KanbanBoard({
   const [editTask, setEditTask] = useState<TaskWithRelations | null>(null)
   const [dragging, setDragging] = useState<string | null>(null)
   const [dragOver, setDragOver] = useState<string | null>(null)
+  const [calCopied, setCalCopied] = useState(false)
+
+  function copyCalendarUrl() {
+    if (!calendarToken) return
+    const url = `${window.location.origin}/api/calendar/${calendarToken}`
+    navigator.clipboard.writeText(url).then(() => {
+      setCalCopied(true)
+      setTimeout(() => setCalCopied(false), 3000)
+    })
+  }
 
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
@@ -479,6 +491,18 @@ export default function KanbanBoard({
           <p className="text-xs mt-0.5 hidden md:block" style={{ color: 'var(--text-muted)' }}>{headerStats}</p>
         </div>
         <div className="flex items-center gap-2">
+          {calendarToken && (
+            <button onClick={copyCalendarUrl}
+              title="Copiar URL para sincronizar com Google Agenda"
+              className="px-3 py-2 rounded-lg text-sm font-semibold hidden md:flex items-center gap-1.5"
+              style={{
+                background: calCopied ? '#4ade8020' : 'var(--surface-2)',
+                color: calCopied ? '#4ade80' : 'var(--text-muted)',
+                border: `1px solid ${calCopied ? '#4ade8040' : 'var(--border)'}`,
+              }}>
+              {calCopied ? '✓ Copiado!' : '📅 Google Agenda'}
+            </button>
+          )}
           <button onClick={() => setShowDone(v => !v)}
             className="px-3 py-2 rounded-lg text-sm font-semibold"
             style={{

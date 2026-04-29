@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import KanbanBoard from '@/components/KanbanBoard'
+import { generateCalendarToken } from '@/lib/calendar-token'
 import type { Task, Client, Profile } from '@/types/database'
 
 export const dynamic = 'force-dynamic'
@@ -67,6 +68,8 @@ export default async function KanbanPage() {
     supabase.from('profiles').select('id, name, avatar_color'),
   ])
 
+  const calendarToken = generateCalendarToken(user!.id)
+
   return (
     <KanbanBoard
       initialTasks={(rawTasks as TaskWithRelations[]) ?? []}
@@ -75,9 +78,10 @@ export default async function KanbanPage() {
       userRole={userRole}
       currentUserId={user!.id}
       hideAssignee={isSelfOnly}
+      calendarToken={calendarToken}
       assignableProfileIds={
         isSelfOnly
-          ? [user!.id]  // só pode atribuir a si mesmo, via ID (não depende do nome)
+          ? [user!.id]
           : assignableNames === null
             ? null
             : (rawProfiles ?? []).filter((p: any) =>
