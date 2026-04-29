@@ -298,11 +298,7 @@ export default function KanbanBoard({
       }
       setShowRawDescription(false)
     } else {
-      // Strip checklist markers when switching back to simples
-      const stripped = description.split('\n')
-        .map(line => { const m = line.match(/^-\s*\[[ xX]?\]\s*(.+)/); return m ? m[1] : line })
-        .join('\n').trim()
-      setDescription(stripped)
+      setDescription('')
     }
   }
 
@@ -681,21 +677,14 @@ export default function KanbanBoard({
       {!showDone && (
       <div id="kanban-board" className="kanban-board flex-1 overflow-x-auto p-3 md:p-6">
         <div className="flex gap-3 md:gap-4 h-full min-w-max">
-          {columns.filter(col => col.id !== 'done').map(col => {
+          {columns.map(col => {
             const colTasks = tasks.filter(t => {
               if (!col.displayStatuses.includes(t.status)) return false
 
               const isDone = t.status === 'done' || t.status === 'sm_aprovacao'
 
-              // Auto-hide concluídas de semanas anteriores — usar updated_at como proxy de conclusão
-              if (isDone) {
-                const updatedAt = (t as any).updated_at
-                const completedDate = updatedAt ? updatedAt.split('T')[0] : (t.due_date || '')
-                if (completedDate < startOfWeek) return false
-              }
-
-              // Não mostrar tarefas antes da data inicial
-              if ((t as any).start_date && (t as any).start_date > today) return false
+              // Cards concluídos nunca aparecem no board — só no painel "✓ Concluídas"
+              if (isDone) return false
 
               if (!filterFrom && !filterTo) return true
               const d = t.due_date || ''
