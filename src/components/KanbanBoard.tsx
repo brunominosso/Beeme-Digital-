@@ -292,12 +292,17 @@ export default function KanbanBoard({
     setTaskStyle(style)
     if (style === 'checklist') {
       const checklist = buildClientChecklist()
-      // Preserva texto já existente que não seja checklist, adiciona clientes
       const parsed = parseChecklist(description)
       if (!parsed.hasChecklist) {
         setDescription(description ? `${description}\n${checklist}` : checklist)
       }
       setShowRawDescription(false)
+    } else {
+      // Strip checklist markers when switching back to simples
+      const stripped = description.split('\n')
+        .map(line => { const m = line.match(/^-\s*\[[ xX]?\]\s*(.+)/); return m ? m[1] : line })
+        .join('\n').trim()
+      setDescription(stripped)
     }
   }
 
@@ -326,7 +331,7 @@ export default function KanbanBoard({
       title, description: description || null,
       client_id: clientId || null, assignee_id: assigneeId || autoAssigneeId || null,
       priority,
-      start_date: startDate || null,
+      start_date: null,
       due_date: dueDate || null,
       due_time: dueTime || null,
       status,
@@ -676,7 +681,7 @@ export default function KanbanBoard({
       {!showDone && (
       <div id="kanban-board" className="kanban-board flex-1 overflow-x-auto p-3 md:p-6">
         <div className="flex gap-3 md:gap-4 h-full min-w-max">
-          {columns.map(col => {
+          {columns.filter(col => col.id !== 'done').map(col => {
             const colTasks = tasks.filter(t => {
               if (!col.displayStatuses.includes(t.status)) return false
 
@@ -1037,21 +1042,11 @@ export default function KanbanBoard({
               )}
             </div>
 
-            {/* Datas */}
+            {/* Data */}
             <div>
-              <p className="text-xs mb-2" style={{ color: 'var(--text-muted)' }}>Período da tarefa</p>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>Data inicial</label>
-                  <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)}
-                    className={inputClass} style={inputStyle} />
-                </div>
-                <div>
-                  <label className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>Data final</label>
-                  <input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)}
-                    className={inputClass} style={inputStyle} />
-                </div>
-              </div>
+              <label className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>Data final</label>
+              <input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)}
+                className={inputClass} style={inputStyle} />
             </div>
 
             <div>

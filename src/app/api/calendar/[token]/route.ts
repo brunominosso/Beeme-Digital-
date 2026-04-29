@@ -80,7 +80,10 @@ export async function GET(
     if (task.due_date) {
       allDay = !task.due_time
       if (allDay) {
-        dtstart = icalDate(task.due_date)
+        // Multi-day: starts today (or due_date if already overdue), ends on due_date
+        const now = new Date()
+        const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+        dtstart = icalDate(todayStr <= task.due_date ? todayStr : task.due_date)
         dtend   = icalNextDay(task.due_date)
       } else {
         dtstart = icalDate(task.due_date, task.due_time)
