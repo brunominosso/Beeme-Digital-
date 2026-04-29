@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import PautasView from '@/components/PautasView'
+import { generateCalendarToken } from '@/lib/calendar-token'
 import type { Pauta, Client, Profile, ProducaoMensal } from '@/types/database'
 
 export const dynamic = 'force-dynamic'
@@ -69,6 +70,8 @@ export default async function PautasPage({ searchParams }: { searchParams: Promi
     )
   }
 
+  const calendarToken = generateCalendarToken(user!.id)
+
   return (
     <PautasView
       initialPautas={(rawPautas as Pauta[]) ?? []}
@@ -79,6 +82,7 @@ export default async function PautasPage({ searchParams }: { searchParams: Promi
       userRole={userRole}
       currentUserId={user!.id}
       initialWeekRef={initialWeekRef}
+      calendarToken={calendarToken}
     />
   )
 }

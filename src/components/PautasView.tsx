@@ -150,12 +150,23 @@ interface Props {
   userRole: string
   currentUserId: string
   initialWeekRef?: string
+  calendarToken?: string
 }
 
-export default function PautasView({ initialPautas, clients, profiles, producao: initialProducao = [], refMonthStr, userRole, currentUserId, initialWeekRef }: Props) {
+export default function PautasView({ initialPautas, clients, profiles, producao: initialProducao = [], refMonthStr, userRole, currentUserId, initialWeekRef, calendarToken }: Props) {
   const router = useRouter()
   const [pautas, setPautas] = useState<Pauta[]>(initialPautas)
   const [producao, setProducao] = useState<ProducaoMensal[]>(initialProducao)
+  const [calCopied, setCalCopied] = useState(false)
+
+  function copyCalendarUrl() {
+    if (!calendarToken) return
+    const url = `${window.location.origin}/api/calendar/${calendarToken}`
+    navigator.clipboard.writeText(url).then(() => {
+      setCalCopied(true)
+      setTimeout(() => setCalCopied(false), 3000)
+    })
+  }
 
   const refresh = useCallback(() => router.refresh(), [router])
 
@@ -577,6 +588,19 @@ export default function PautasView({ initialPautas, clients, profiles, producao:
               </span>
             )}
           </div>
+
+          {calendarToken && (
+            <button onClick={copyCalendarUrl}
+              title="Copiar URL para sincronizar com Google Agenda"
+              className="px-3 py-1.5 rounded-lg text-xs font-semibold shrink-0"
+              style={{
+                background: calCopied ? '#4ade8020' : 'var(--surface-2)',
+                color: calCopied ? '#4ade80' : 'var(--text-muted)',
+                border: `1px solid ${calCopied ? '#4ade8040' : 'var(--border)'}`,
+              }}>
+              {calCopied ? '✓ Copiado!' : '📅 Google Agenda'}
+            </button>
+          )}
 
           <button onClick={refresh} title="Atualizar"
             className="w-7 h-7 flex items-center justify-center rounded-lg text-sm shrink-0"
