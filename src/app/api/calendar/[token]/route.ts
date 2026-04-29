@@ -125,6 +125,10 @@ export async function GET(
       ? `DTEND;VALUE=DATE:${dtend}`
       : `DTEND;TZID=America/Sao_Paulo:${dtend}`
 
+    const alarm = allDay
+      ? 'BEGIN:VALARM\r\nACTION:DISPLAY\r\nDESCRIPTION:Lembrete de tarefa\r\nTRIGGER:-PT0S\r\nEND:VALARM'
+      : 'BEGIN:VALARM\r\nACTION:DISPLAY\r\nDESCRIPTION:Lembrete de tarefa\r\nTRIGGER:-PT30M\r\nEND:VALARM'
+
     return [
       'BEGIN:VEVENT',
       `UID:task-${task.id}@beemedigital`,
@@ -134,6 +138,7 @@ export async function GET(
       `SUMMARY:${escapeIcal(title)}`,
       `DESCRIPTION:${description}`,
       'STATUS:NEEDS-ACTION',
+      alarm,
       'END:VEVENT',
     ].join('\r\n')
   })
@@ -163,6 +168,7 @@ export async function GET(
       `SUMMARY:${escapeIcal(title)}`,
       `DESCRIPTION:${description}`,
       'STATUS:NEEDS-ACTION',
+      'BEGIN:VALARM\r\nACTION:DISPLAY\r\nDESCRIPTION:Lembrete de pauta\r\nTRIGGER:-PT0S\r\nEND:VALARM',
       'END:VEVENT',
     ].join('\r\n')
   })
