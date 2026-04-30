@@ -90,6 +90,11 @@ export default function PipelineView({
   const router = useRouter()
   const [records, setRecords] = useState<ProducaoMensal[]>(producao)
   const [viewMonth, setViewMonth] = useState(refMonthStr)
+
+  const todayStr = (() => {
+    const d = new Date()
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  })()
   const [refreshing, setRefreshing] = useState(false)
   const [lastRefresh, setLastRefresh] = useState(new Date())
 
@@ -157,7 +162,11 @@ export default function PipelineView({
     const concluidos = monthRecords.filter(r => r.status === 'concluido').length
     const emAndamento = monthRecords.filter(r => r.status === 'em_andamento').length
     const bloqueados = monthRecords.filter(r => r.status === 'bloqueado').length
-    const atrasados = monthRecords.filter(r => r.status === 'atrasado').length
+    const atrasados = monthRecords.filter(r => {
+      if (r.status !== 'em_andamento') return false
+      const pauta = pautaIndex[`${r.client_id}__${r.etapa}`]
+      return pauta && pauta.data < todayStr
+    }).length
     const pct = totalCells > 0 ? Math.round((concluidos / totalCells) * 100) : 0
     const clientesConcluidos = clients.filter(c =>
       ETAPAS.every(e => recordIndex[`${c.id}__${e.key}`]?.status === 'concluido')
@@ -409,12 +418,16 @@ export default function PipelineView({
                     {ETAPAS.map(e => {
                       const recKey = `${client.id}__${e.key}`
                       const record = recordIndex[recKey]
-                      const st = (record?.status ?? 'pendente') as StatusKey
-                      const cfg = STATUS[st]
+                      const rawSt = (record?.status ?? 'pendente') as StatusKey
 
                       // Pauta correspondente a esta etapa/cliente
                       const pauta = pautaIndex[recKey]
                       const assignee = pauta ? profileById[pauta.assignee_id] : null
+
+                      // Atrasado: em_andamento com data de pauta já passada
+                      const isAtrasado = rawSt === 'em_andamento' && pauta && pauta.data < todayStr
+                      const st: StatusKey = isAtrasado ? 'atrasado' : rawSt
+                      const cfg = STATUS[st]
 
                       const isPendente = st === 'pendente'
 

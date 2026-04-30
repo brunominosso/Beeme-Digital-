@@ -22,7 +22,6 @@ export default async function PipelinePage() {
   const userRole = (rawProfile as any)?.role ?? 'social_media'
 
   const now = new Date()
-  const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
   const refMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1)
   const refMonthStr = refMonth.toISOString().split('T')[0]
   const currentMonthStr = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0]
@@ -107,13 +106,10 @@ export default async function PipelinePage() {
 
   for (const [key, { status, data }] of Object.entries(pautaBestByKey)) {
     const [clientId, etapa] = key.split('__')
-    const isOverdue = status !== 'concluido' && data < todayStr
-    const pipelineStatus = status === 'concluido' ? 'concluido' : isOverdue ? 'atrasado' : 'em_andamento'
+    const pipelineStatus = status === 'concluido' ? 'concluido' : 'em_andamento'
     const notas = status === 'concluido'
       ? 'Auto: pauta concluída'
-      : isOverdue
-        ? `Auto: pauta de ${data} não foi concluída`
-        : `Auto: pauta agendada para ${data}`
+      : `Auto: pauta agendada para ${data}`
     autoUpserts.push({ client_id: clientId, mes: refMonthStr, etapa, status: pipelineStatus, notas })
   }
 
