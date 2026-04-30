@@ -464,26 +464,28 @@ export default function KanbanBoard({
     setShowForm(true)
   }
 
-  function buildGoogleCalendarUrl(): string | null {
-    if (!dueDate) return null
-    const dateStr = dueDate.replace(/-/g, '')
-    let dates: string
-    if (dueTime) {
-      const timeStr = dueTime.replace(/:/g, '') + '00'
-      const start = new Date(`${dueDate}T${dueTime}:00`)
-      const end = new Date(start.getTime() + 60 * 60 * 1000)
-      const ed = `${end.getFullYear()}${String(end.getMonth()+1).padStart(2,'0')}${String(end.getDate()).padStart(2,'0')}`
-      const et = `${String(end.getHours()).padStart(2,'0')}${String(end.getMinutes()).padStart(2,'0')}00`
-      dates = `${dateStr}T${timeStr}/${ed}T${et}`
-    } else {
-      const next = new Date(dueDate + 'T12:00:00')
-      next.setDate(next.getDate() + 1)
-      const nd = `${next.getFullYear()}${String(next.getMonth()+1).padStart(2,'0')}${String(next.getDate()).padStart(2,'0')}`
-      dates = `${dateStr}/${nd}`
-    }
+  function buildGoogleCalendarUrl(): string {
     const clientName = clients.find(c => c.id === clientId)?.name
     const titleText = clientName ? `${title} — ${clientName}` : title
-    const params = new URLSearchParams({ action: 'TEMPLATE', text: titleText, dates })
+    const params = new URLSearchParams({ action: 'TEMPLATE', text: titleText || 'Nova tarefa' })
+    if (dueDate) {
+      const dateStr = dueDate.replace(/-/g, '')
+      let dates: string
+      if (dueTime) {
+        const timeStr = dueTime.replace(/:/g, '') + '00'
+        const start = new Date(`${dueDate}T${dueTime}:00`)
+        const end = new Date(start.getTime() + 60 * 60 * 1000)
+        const ed = `${end.getFullYear()}${String(end.getMonth()+1).padStart(2,'0')}${String(end.getDate()).padStart(2,'0')}`
+        const et = `${String(end.getHours()).padStart(2,'0')}${String(end.getMinutes()).padStart(2,'0')}00`
+        dates = `${dateStr}T${timeStr}/${ed}T${et}`
+      } else {
+        const next = new Date(dueDate + 'T12:00:00')
+        next.setDate(next.getDate() + 1)
+        const nd = `${next.getFullYear()}${String(next.getMonth()+1).padStart(2,'0')}${String(next.getDate()).padStart(2,'0')}`
+        dates = `${dateStr}/${nd}`
+      }
+      params.set('dates', dates)
+    }
     if (description) params.set('details', description)
     return `https://calendar.google.com/calendar/render?${params.toString()}`
   }
@@ -1123,16 +1125,11 @@ export default function KanbanBoard({
               </div>
             </div>
 
-            {(() => {
-              const gcalUrl = buildGoogleCalendarUrl()
-              return gcalUrl ? (
-                <a href={gcalUrl} target="_blank" rel="noopener noreferrer"
-                  className="flex items-center justify-center gap-2 w-full py-2 rounded-lg text-xs font-semibold"
-                  style={{ background: 'var(--surface-2)', color: 'var(--text-muted)', border: '1px solid var(--border)' }}>
-                  📅 Adicionar este evento ao Google Agenda
-                </a>
-              ) : null
-            })()}
+            <a href={buildGoogleCalendarUrl()} target="_blank" rel="noopener noreferrer"
+              className="flex items-center justify-center gap-2 w-full py-2 rounded-lg text-xs font-semibold"
+              style={{ background: 'var(--surface-2)', color: 'var(--text-muted)', border: '1px solid var(--border)' }}>
+              📅 Adicionar ao Google Agenda
+            </a>
 
             <div className="flex gap-2">
               <button onClick={handleSave} disabled={!title || saving}
