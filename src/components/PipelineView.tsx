@@ -26,13 +26,14 @@ const ETAPAS: Etapa[] = [
 
 // ── Status ────────────────────────────────────────────────────
 
-type StatusKey = 'pendente' | 'em_andamento' | 'concluido' | 'bloqueado'
+type StatusKey = 'pendente' | 'em_andamento' | 'concluido' | 'bloqueado' | 'atrasado'
 
 const STATUS: Record<StatusKey, { label: string; color: string; bg: string; border: string; icon: string }> = {
   pendente:     { label: 'Pendente',      color: '#5a5e8a', bg: 'transparent',  border: 'var(--border)',  icon: '○' },
   em_andamento: { label: 'Em andamento',  color: '#fbbf24', bg: '#fbbf2410',    border: '#fbbf2440',      icon: '◑' },
   concluido:    { label: 'Concluído',     color: '#4ade80', bg: '#4ade8012',    border: '#4ade8050',      icon: '✓' },
   bloqueado:    { label: 'Bloqueado',     color: '#f87171', bg: '#f8717112',    border: '#f8717150',      icon: '✕' },
+  atrasado:     { label: 'Atrasado',      color: '#ef4444', bg: '#ef444415',    border: '#ef4444',        icon: '🚨' },
 }
 
 // ── Helpers ───────────────────────────────────────────────────
@@ -156,11 +157,12 @@ export default function PipelineView({
     const concluidos = monthRecords.filter(r => r.status === 'concluido').length
     const emAndamento = monthRecords.filter(r => r.status === 'em_andamento').length
     const bloqueados = monthRecords.filter(r => r.status === 'bloqueado').length
+    const atrasados = monthRecords.filter(r => r.status === 'atrasado').length
     const pct = totalCells > 0 ? Math.round((concluidos / totalCells) * 100) : 0
     const clientesConcluidos = clients.filter(c =>
       ETAPAS.every(e => recordIndex[`${c.id}__${e.key}`]?.status === 'concluido')
     ).length
-    return { totalCells, concluidos, emAndamento, bloqueados, pct, clientesConcluidos }
+    return { totalCells, concluidos, emAndamento, bloqueados, atrasados, pct, clientesConcluidos }
   }, [records, viewMonth, clients, recordIndex])
 
   const diasAte25 = daysUntil25()
@@ -265,6 +267,16 @@ export default function PipelineView({
             </p>
             <p className="label-caps mt-0.5">Sem pauta</p>
           </div>
+
+          {kpis.atrasados > 0 && (
+            <div className="shrink-0 text-center px-3 rounded-lg py-1"
+              style={{ background: '#ef444415', border: '1px solid #ef444440' }}>
+              <p className="font-bold" style={{ fontSize: '1.6rem', fontFamily: 'var(--font-barlow)', color: '#ef4444' }}>
+                🚨 {kpis.atrasados}
+              </p>
+              <p className="label-caps mt-0.5" style={{ color: '#ef4444' }}>Atrasados</p>
+            </div>
+          )}
 
           {kpis.bloqueados > 0 && (
             <div className="shrink-0 text-center px-3">
@@ -430,12 +442,13 @@ export default function PipelineView({
                             // Célula com status
                             <div
                               title={record?.notas ?? cfg.label}
-                              className="mx-auto flex flex-col items-center gap-1 rounded-lg transition-all"
+                              className={`mx-auto flex flex-col items-center gap-1 rounded-lg transition-all${st === 'atrasado' ? ' animate-pulse' : ''}`}
                               style={{
                                 minHeight: 56, padding: '6px 8px',
                                 background: cfg.bg,
                                 border: `1.5px solid ${cfg.border}`,
                                 color: cfg.color,
+                                boxShadow: st === 'atrasado' ? '0 0 8px #ef444460' : undefined,
                               }}>
                               {/* Ícone + status */}
                               <span className="text-sm font-bold leading-none">{cfg.icon}</span>
