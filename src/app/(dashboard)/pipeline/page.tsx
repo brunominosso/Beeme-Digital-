@@ -22,17 +22,15 @@ export default async function PipelinePage() {
   const userRole = (rawProfile as any)?.role ?? 'social_media'
 
   const now = new Date()
-  const refMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1)
-  const refMonthStr = refMonth.toISOString().split('T')[0]
-  const currentMonthStr = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0]
-  // Pautas: mês ANTERIOR + mês ATUAL (suporta ver o pipeline do mês atual e do próximo)
-  const prevMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1)
-  const pautaStart = `${prevMonthStart.getFullYear()}-${String(prevMonthStart.getMonth() + 1).padStart(2, '0')}-01`
+  // Pipeline e pautas são do mesmo mês (mês atual)
+  const refMonthStr = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0]
+  const currentMonthStr = refMonthStr
+  const pautaStart = refMonthStr
   const pautaEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0]
 
-  // Posts: mês do PIPELINE (próximo mês — conteúdo que será publicado)
+  // Posts: mesmo mês
   const postStart = refMonthStr
-  const postEnd = new Date(refMonth.getFullYear(), refMonth.getMonth() + 1, 0).toISOString().split('T')[0]
+  const postEnd = pautaEnd
 
   const [
     { data: rawProfiles },
@@ -46,7 +44,7 @@ export default async function PipelinePage() {
       .in('role', ['social_media', 'designer', 'admin', 'gestor']),
     supabase.from('clients').select('id, name, status, responsible_ids')
       .eq('status', 'ativo').order('name'),
-    supabase.from('producao_mensal').select('*').in('mes', [pautaStart, currentMonthStr, refMonthStr]).order('mes'),
+    supabase.from('producao_mensal').select('*').eq('mes', refMonthStr),
     supabase.from('pautas').select('id, client_id, tipo, status, data, assignee_id')
       .gte('data', pautaStart).lte('data', pautaEnd),
     supabase.from('posts').select('client_id, status, publish_date')

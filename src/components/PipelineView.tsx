@@ -132,11 +132,8 @@ export default function PipelineView({
       agendamento:  'agendamento',
     }
 
-    // Mês fonte: mês anterior ao viewMonth
-    const vm = new Date(viewMonth + 'T12:00:00')
-    const srcYear  = vm.getMonth() === 0 ? vm.getFullYear() - 1 : vm.getFullYear()
-    const srcMonth = vm.getMonth() === 0 ? 12 : vm.getMonth() // 1-indexed
-    const srcPrefix = `${srcYear}-${String(srcMonth).padStart(2, '0')}`
+    // Pautas do mesmo mês que viewMonth
+    const srcPrefix = viewMonth.slice(0, 7) // "YYYY-MM"
 
     const rank: Record<string, number> = { concluido: 3, em_andamento: 2, pendente: 1 }
     const idx: Record<string, PautaInfo> = {}
