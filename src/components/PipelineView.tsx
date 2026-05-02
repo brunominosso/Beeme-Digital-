@@ -122,6 +122,7 @@ export default function PipelineView({
   }, [records, viewMonth])
 
   // Index de pautas por clientId+etapaTipo → pauta mais relevante
+  // Filtra pautas do mês anterior ao viewMonth (ex: viewMonth=Junho → pautas de Maio)
   const pautaIndex = useMemo(() => {
     const ETAPA_TIPO: Record<string, string> = {
       planejamento: 'planejamento',
@@ -130,11 +131,18 @@ export default function PipelineView({
       design:       'edicao_cards',
       agendamento:  'agendamento',
     }
+
+    // Mês fonte: mês anterior ao viewMonth
+    const vm = new Date(viewMonth + 'T12:00:00')
+    const srcYear  = vm.getMonth() === 0 ? vm.getFullYear() - 1 : vm.getFullYear()
+    const srcMonth = vm.getMonth() === 0 ? 12 : vm.getMonth() // 1-indexed
+    const srcPrefix = `${srcYear}-${String(srcMonth).padStart(2, '0')}`
+
     const rank: Record<string, number> = { concluido: 3, em_andamento: 2, pendente: 1 }
     const idx: Record<string, PautaInfo> = {}
     for (const pauta of pautas) {
       if (!pauta.client_id || pauta.status === 'cancelado') continue
-      // Encontra qual etapa do pipeline este tipo de pauta corresponde
+      if (!pauta.data.startsWith(srcPrefix)) continue
       const etapa = Object.entries(ETAPA_TIPO).find(([, tipo]) => tipo === pauta.tipo)?.[0]
       if (!etapa) continue
       const key = `${pauta.client_id}__${etapa}`
@@ -144,7 +152,7 @@ export default function PipelineView({
       }
     }
     return idx
-  }, [pautas])
+  }, [pautas, viewMonth])
 
   // Index profiles por id
   const profileById = useMemo(() => {
