@@ -22,13 +22,14 @@ export default async function PipelinePage() {
   const userRole = (rawProfile as any)?.role ?? 'social_media'
 
   const now = new Date()
-  // Pipeline e pautas são do mesmo mês (mês atual)
+  // Pipeline e pautas são do mesmo mês
   const refMonthStr = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0]
   const currentMonthStr = refMonthStr
-  const pautaStart = refMonthStr
+  // Pautas: 3 meses atrás até fim do mês atual (para suportar navegação histórica e sirenes)
+  const pautaStart = new Date(now.getFullYear(), now.getMonth() - 3, 1).toISOString().split('T')[0]
   const pautaEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0]
 
-  // Posts: mesmo mês
+  // Posts: mês atual
   const postStart = refMonthStr
   const postEnd = pautaEnd
 
@@ -44,7 +45,9 @@ export default async function PipelinePage() {
       .in('role', ['social_media', 'designer', 'admin', 'gestor']),
     supabase.from('clients').select('id, name, status, responsible_ids')
       .eq('status', 'ativo').order('name'),
-    supabase.from('producao_mensal').select('*').eq('mes', refMonthStr),
+    supabase.from('producao_mensal').select('*')
+      .gte('mes', new Date(now.getFullYear(), now.getMonth() - 3, 1).toISOString().split('T')[0])
+      .order('mes'),
     supabase.from('pautas').select('id, client_id, tipo, status, data, assignee_id')
       .gte('data', pautaStart).lte('data', pautaEnd),
     supabase.from('posts').select('client_id, status, publish_date')
