@@ -88,93 +88,77 @@ export default async function PipelinePage() {
 
   // ── Auto-popular: pautas + posts + aprovação ──────────────
   const autoUpserts: any[] = []
-
-  // 1. Pautas → etapas
-  // Agrupa por client+etapa, pega o melhor status (concluido > em_andamento > pendente)
-  const pautaBestByKey: Record<string, { status: string; data: string }> = {}
   const rank: Record<string, number> = { concluido: 3, em_andamento: 2, pendente: 1 }
-  for (const pauta of (rawPautas ?? []) as any[]) {
-    const etapa = PAUTA_ETAPA[pauta.tipo]
-    if (!etapa || !pauta.client_id || pauta.status === 'cancelado') continue
-    const key = `${pauta.client_id}__${etapa}`
-    const existing = pautaBestByKey[key]
-    if (!existing || (rank[pauta.status] ?? 0) > (rank[existing.status] ?? 0)) {
-      pautaBestByKey[key] = { status: pauta.status, data: pauta.data }
-    }
-  }
-
-  // Etapas mapeadas a pautas (aprovacao é controlada pelos posts, não por pauta)
   const ETAPAS_PAUTA = Object.values(PAUTA_ETAPA)
 
-  for (const [key, { status, data }] of Object.entries(pautaBestByKey)) {
-    const [clientId, etapa] = key.split('__')
-    const pipelineStatus = status === 'concluido' ? 'concluido' : 'em_andamento'
-    const notas = status === 'concluido'
-      ? 'Auto: pauta concluída'
-      : `Auto: pauta agendada para ${data}`
-    autoUpserts.push({ client_id: clientId, mes: refMonthStr, etapa, status: pipelineStatus, notas })
+  // 1. Pautas → etapas, agrupadas POR MÊS (cada mês constrói o seu próprio pipeline)
+  const pautasByMonth: Record<string, any[]> = {}
+  for (const pauta of (rawPautas ?? []) as any[]) {
+    if (!pauta.client_id || pauta.status === 'cancelado' || !PAUTA_ETAPA[pauta.tipo]) continue
+    const monthKey = pauta.data.slice(0, 7) + '-01'
+    if (!pautasByMonth[monthKey]) pautasByMonth[monthKey] = []
+    pautasByMonth[monthKey].push(pauta)
   }
 
-  // Reseta para "pendente" todas as etapas de cliente que NÃO têm pauta no mês
-  // Isto garante que pautas apagadas limpam o pipeline corretamente
-  for (const client of clients as any[]) {
-    for (const etapa of ETAPAS_PAUTA) {
-      const key = `${client.id}__${etapa}`
-      if (!pautaBestByKey[key]) {
-        autoUpserts.push({
-          client_id: client.id, mes: refMonthStr, etapa,
-          status: 'pendente', notas: 'Auto: sem pauta agendada',
-        })
+  for (const [monthStr, monthPautas] of Object.entries(pautasByMonth)) {
+    const bestByKey: Record<string, { status: string; data: string }> = {}
+    for (const pauta of monthPautas) {
+      const etapa = PAUTA_ETAPA[pauta.tipo]
+      const key = `${pauta.client_id}__${etapa}`
+      const existing = bestByKey[key]
+      if (!existing || (rank[pauta.status] ?? 0) > (rank[existing.status] ?? 0)) {
+        bestByKey[key] = { status: pauta.status, data: pauta.data }
+      }
+    }
+
+    for (const [key, { status, data }] of Object.entries(bestByKey)) {
+      const [clientId, etapa] = key.split('__')
+      const pipelineStatus = status === 'concluido' ? 'concluido' : 'em_andamento'
+      autoUpserts.push({
+        client_id: clientId, mes: monthStr, etapa, status: pipelineStatus,
+        notas: status === 'concluido' ? 'Auto: pauta concluída' : `Auto: pauta agendada para ${data}`,
+      })
+    }
+
+    // Reseta etapas sem pauta para este mês
+    for (const client of clients as any[]) {
+      for (const etapa of ETAPAS_PAUTA) {
+        if (!bestByKey[`${client.id}__${etapa}`]) {
+          autoUpserts.push({ client_id: client.id, mes: monthStr, etapa, status: 'pendente', notas: 'Auto: sem pauta agendada' })
+        }
       }
     }
   }
 
-  // 2. Posts todos publicados → agendamento concluído
+  // 2. Posts (só mês atual)
   for (const [clientId, posts] of Object.entries(postsByClient)) {
     if (posts.length > 0 && posts.every((p: any) => p.status === 'sm_postado')) {
-      autoUpserts.push({
-        client_id: clientId, mes: refMonthStr, etapa: 'agendamento',
-        status: 'concluido', notas: 'Auto: todos os posts publicados',
-      })
+      autoUpserts.push({ client_id: clientId, mes: refMonthStr, etapa: 'agendamento', status: 'concluido', notas: 'Auto: todos os posts publicados' })
     }
   }
 
-  // 3. Aprovação — ciclo completo com o cliente
+  // 3. Aprovação (só mês atual)
   for (const client of clients as any[]) {
     const ajustes    = ajusteByClient[client.id] ?? 0
     const aguardando = aguardandoByClient[client.id] ?? 0
     const clientPosts = postsByClient[client.id] ?? []
-    const allApproved = clientPosts.length > 0 &&
-      clientPosts.every((p: any) => p.status === 'sm_aprovado' || p.status === 'sm_postado')
-
-    let status: string
-    let notas: string
-
-    if (ajustes > 0) {
-      status = 'bloqueado'
-      notas = `Auto: cliente pediu alteração em ${ajustes} material${ajustes > 1 ? 'is' : ''}`
-    } else if (aguardando > 0) {
-      status = 'em_andamento'
-      notas = `Auto: ${aguardando} material${aguardando > 1 ? 'is' : ''} aguardando aprovação do cliente`
-    } else if (allApproved) {
-      status = 'concluido'
-      notas = 'Auto: todos os materiais aprovados pelo cliente'
-    } else {
-      status = 'pendente'
-      notas = 'Auto: materiais ainda não enviados para aprovação'
-    }
-
+    const allApproved = clientPosts.length > 0 && clientPosts.every((p: any) => p.status === 'sm_aprovado' || p.status === 'sm_postado')
+    const status = ajustes > 0 ? 'bloqueado' : aguardando > 0 ? 'em_andamento' : allApproved ? 'concluido' : 'pendente'
+    const notas = ajustes > 0
+      ? `Auto: cliente pediu alteração em ${ajustes} material${ajustes > 1 ? 'is' : ''}`
+      : aguardando > 0 ? `Auto: ${aguardando} material${aguardando > 1 ? 'is' : ''} aguardando aprovação`
+      : allApproved ? 'Auto: todos os materiais aprovados' : 'Auto: materiais ainda não enviados'
     autoUpserts.push({ client_id: client.id, mes: refMonthStr, etapa: 'aprovacao', status, notas })
   }
 
   if (autoUpserts.length > 0) {
-    await supabase.from('producao_mensal').upsert(autoUpserts, {
-      onConflict: 'client_id,mes,etapa',
-    })
+    await supabase.from('producao_mensal').upsert(autoUpserts, { onConflict: 'client_id,mes,etapa' })
   }
 
   const { data: finalProducao } = await supabase
-    .from('producao_mensal').select('*').in('mes', [refMonthStr, currentMonthStr])
+    .from('producao_mensal').select('*')
+    .gte('mes', pautaStart)
+    .order('mes')
 
   return (
     <PipelineView
