@@ -130,6 +130,19 @@ export default async function PipelinePage() {
     }
   }
 
+  // 1b. Limpar meses com registos antigos mas sem pautas (ex: Junho criado pela lógica antiga)
+  const monthsWithPautas = new Set(Object.keys(pautasByMonth))
+  const existingMonths = [...new Set((rawProducao ?? []).map((r: any) => r.mes as string))]
+  for (const staleMonth of existingMonths) {
+    if (!monthsWithPautas.has(staleMonth)) {
+      for (const client of clients as any[]) {
+        for (const etapa of [...ETAPAS_PAUTA, 'aprovacao']) {
+          autoUpserts.push({ client_id: client.id, mes: staleMonth, etapa, status: 'pendente', notas: 'Auto: sem pauta agendada' })
+        }
+      }
+    }
+  }
+
   // 2. Posts (só mês atual)
   for (const [clientId, posts] of Object.entries(postsByClient)) {
     if (posts.length > 0 && posts.every((p: any) => p.status === 'sm_postado')) {
