@@ -21,6 +21,7 @@ const NAV: NavGroup[] = [
     { href: '/kanban',     label: 'Tarefas',           icon: '📋', exact: false, roles: ['admin','gestor','social_media','designer','editor'] },
     { href: '/pipeline',   label: 'Pipeline',             icon: '📊', exact: false, roles: ['admin','social_media','designer','editor'] },
     { href: '/pautas',     label: 'Pautas',              icon: '📆', exact: false, roles: ['admin','social_media','designer','captacao'] },
+    { href: '/video-demands', label: 'Demandas de Vídeo', icon: '🎬', exact: false, roles: ['admin','gestor','captacao'] },
     { href: '/meetings',   label: 'Reuniões',           icon: '📅', exact: false, roles: ['admin','gestor','social_media'] },
     { href: '/goals',      label: 'Metas & OKR',        icon: '🎯', exact: false, roles: ['admin','gestor'] },
     { href: '/financial',  label: 'Financeiro',          icon: '💰', exact: false, roles: ['admin','financeiro'] },

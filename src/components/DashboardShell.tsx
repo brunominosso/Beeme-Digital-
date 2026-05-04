@@ -26,6 +26,7 @@ const PAGE_TITLES: Record<string, string> = {
   '/about': 'Quem Somos',
   '/services': 'Serviços',
   '/admin': 'Equipa',
+  '/video-demands': 'Demandas de Vídeo',
 }
 
 function getPageTitle(pathname: string) {

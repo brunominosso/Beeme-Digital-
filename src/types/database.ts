@@ -630,6 +630,42 @@ export interface Database {
         }
         Relationships: []
       }
+      video_demands: {
+        Row: {
+          id: string
+          client_id: string | null
+          created_by: string | null
+          briefing: string
+          drive_material_link: string
+          drive_edited_link: string | null
+          status: string
+          notas: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          client_id?: string | null
+          created_by?: string | null
+          briefing: string
+          drive_material_link: string
+          drive_edited_link?: string | null
+          status?: string
+          notas?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          client_id?: string | null
+          briefing?: string
+          drive_material_link?: string
+          drive_edited_link?: string | null
+          status?: string
+          notas?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: Record<string, never>
     Functions: Record<string, never>
@@ -654,3 +690,4 @@ export type PaymentSchedule = Database['public']['Tables']['payment_schedules'][
 export type TaskTemplate = Database['public']['Tables']['task_templates']['Row']
 export type Pauta = Database['public']['Tables']['pautas']['Row']
 export type ProducaoMensal = Database['public']['Tables']['producao_mensal']['Row']
+export type VideoDemand = Database['public']['Tables']['video_demands']['Row']
